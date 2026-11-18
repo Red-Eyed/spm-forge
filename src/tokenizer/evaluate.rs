@@ -83,6 +83,8 @@ pub struct FileReport {
 
 #[derive(Debug, Serialize)]
 pub struct Report {
+    pub baseline_model_blake3: String,
+    pub candidate_model_blake3: String,
     pub baseline_vocab_size: usize,
     pub candidate_vocab_size: usize,
     pub same_vocab_size: bool,
@@ -122,6 +124,8 @@ pub fn compare(
         });
     }
     Ok(Report {
+        baseline_model_blake3: baseline.fingerprint(),
+        candidate_model_blake3: candidate.fingerprint(),
         baseline_vocab_size: baseline.proto.pieces.len(),
         candidate_vocab_size: candidate.proto.pieces.len(),
         same_vocab_size: baseline.proto.pieces.len() == candidate.proto.pieces.len(),

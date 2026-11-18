@@ -9,14 +9,28 @@ const PLAIN_STATUS_INTERVAL: Duration = Duration::from_secs(10);
 
 pub struct ProgressReporter {
     json_output: bool,
+    quiet: bool,
 }
 
 impl ProgressReporter {
     pub fn new(json_output: bool) -> Self {
-        Self { json_output }
+        Self {
+            json_output,
+            quiet: false,
+        }
+    }
+
+    pub fn silent() -> Self {
+        Self {
+            json_output: false,
+            quiet: true,
+        }
     }
 
     pub fn stage(&self, message: impl Into<String>) -> StageProgress {
+        if self.quiet {
+            return StageProgress::interactive(ProgressBar::hidden());
+        }
         let message = message.into();
         if self.json_output {
             eprintln!("{message}");
@@ -34,6 +48,9 @@ impl ProgressReporter {
     }
 
     pub fn stage_bar(&self, message: impl Into<String>, total: u64) -> StageProgress {
+        if self.quiet {
+            return StageProgress::interactive(ProgressBar::hidden());
+        }
         let message = message.into();
         if self.json_output {
             eprintln!("{message}");

@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -12,7 +12,7 @@ use crate::config::{self, EffectiveConfig};
 use crate::corpus::{self, DiscoveredCorpus};
 use crate::progress::ProgressReporter;
 use crate::repair::{self, RepairSummary};
-use crate::tokenizer::{evaluate, model::Model, records::DEFAULT_MAX_RECORD_BYTES};
+use crate::tokenizer::{evaluate, mingram, model::Model, records::DEFAULT_MAX_RECORD_BYTES};
 use crate::trainer::{self, TrainerOutput};
 
 #[derive(Debug, Parser)]
@@ -28,6 +28,30 @@ pub struct Cli {
 enum Command {
     Train(TrainArgs),
     Evaluate(EvaluateArgs),
+    Mingram(MingramArgs),
+}
+
+#[derive(Debug, Args)]
+struct MingramArgs {
+    /// Existing BPE/Unigram candidate model; otherwise generate a BPE seed using --config.
+    #[arg(long)]
+    seed_model: Option<PathBuf>,
+    #[arg(long, required = true, num_args = 1..)]
+    input: Vec<PathBuf>,
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(long, default_value_t = 8192)]
+    vocab_size: usize,
+    #[arg(long, default_value_t = 2)]
+    iterations: usize,
+    #[arg(long, default_value_t = DEFAULT_MAX_RECORD_BYTES)]
+    max_record_bytes: usize,
+    #[arg(long, default_value = "cfg.json")]
+    config: PathBuf,
+    #[arg(long, default_value = "cfg.json.ocr")]
+    preset_config: PathBuf,
+    #[arg(long)]
+    quiet: bool,
 }
 
 #[derive(Debug, Args)]
@@ -97,7 +121,87 @@ pub fn run() -> Result<()> {
     match cli.command {
         Command::Train(args) => train(args, cli.json, &cancellation),
         Command::Evaluate(args) => evaluate_models(args, cli.json, &cancellation),
+        Command::Mingram(args) => train_mingram(args, cli.json, &cancellation),
     }
+}
+
+fn train_mingram(
+    args: MingramArgs,
+    json_output: bool,
+    cancellation: &CancellationToken,
+) -> Result<()> {
+    ensure!(
+        args.output.extension().is_some_and(|ext| ext == "model"),
+        "output must end in .model"
+    );
+    ensure!(
+        args.vocab_size > 0 && args.iterations > 0 && args.max_record_bytes > 0,
+        "vocabulary size, iterations, and max_record_bytes must be positive"
+    );
+    for path in [
+        &args.output,
+        &args.output.with_extension("vocab"),
+        &args.output.with_extension("mingram.json"),
+    ] {
+        ensure!(!path.exists(), "refusing to overwrite {}", path.display());
+    }
+    let seed_path = prepare_mingram_seed(&args, json_output, cancellation)?;
+    let seed = Model::load(&seed_path)?;
+    let options = mingram::Options {
+        vocab_size: args.vocab_size,
+        iterations: args.iterations,
+        max_record_bytes: args.max_record_bytes,
+        quiet: args.quiet,
+    };
+    let trained = mingram::train(&seed, &args.input, &options, cancellation)?;
+    cancellation.check()?;
+    mingram::save(&trained, &args.output)?;
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&trained.report)?);
+    } else {
+        println!(
+            "MinGram: {} → {} pieces; output {}",
+            trained.report.seed_vocab_size,
+            trained.report.output_vocab_size,
+            args.output.display()
+        );
+        for pass in &trained.report.passes {
+            println!(
+                "  {}: {} records, {} tokens, {} used pieces",
+                pass.phase, pass.records, pass.tokens, pass.used_pieces
+            );
+        }
+    }
+    Ok(())
+}
+
+fn prepare_mingram_seed(
+    args: &MingramArgs,
+    json_output: bool,
+    cancellation: &CancellationToken,
+) -> Result<PathBuf> {
+    if let Some(path) = &args.seed_model {
+        return Ok(path.clone());
+    }
+    ensure!(!args.output.with_extension("seed").exists(),
+        "seed directory already exists; supply --seed-model to reuse it or choose a new output path");
+    let mut config = config::load_effective_config(&args.config, &args.preset_config)?;
+    let size = args
+        .vocab_size
+        .checked_mul(115)
+        .context("seed vocabulary size overflow")?
+        .div_ceil(100);
+    config.sentencepiece.vocab_size = u32::try_from(size)?;
+    config.output.work_dir = args.output.with_extension("seed");
+    config.output.model_prefix = "seed".to_owned();
+    let progress = if args.quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(json_output)
+    };
+    // Seed training uses the supplied records directly, bypassing OCR repair and balancing.
+    let output = trainer::train_sentencepiece(&config, &args.input, &progress, cancellation)?;
+    Ok(output.model)
 }
 
 fn evaluate_models(
@@ -392,6 +496,53 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn parses_existing_seed_mingram_without_ocr_config() {
+        let cli = Cli::try_parse_from([
+            "spm-ocr",
+            "mingram",
+            "--seed-model",
+            "seed.model",
+            "--input",
+            "train.txt",
+            "--output",
+            "out.model",
+            "--quiet",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Mingram(args) => {
+                assert_eq!(args.seed_model, Some(PathBuf::from("seed.model")));
+                assert_eq!(args.vocab_size, 8192);
+                assert_eq!(args.iterations, 2);
+                assert!(args.quiet);
+            }
+            other => panic!("expected mingram, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_json_paired_evaluation_with_multiple_files() {
+        let cli = Cli::try_parse_from([
+            "spm-ocr",
+            "--json",
+            "evaluate",
+            "--baseline",
+            "a.model",
+            "--candidate",
+            "b.model",
+            "--input",
+            "one.txt",
+            "two.txt",
+        ])
+        .unwrap();
+        assert!(cli.json);
+        match cli.command {
+            Command::Evaluate(args) => assert_eq!(args.input.len(), 2),
+            other => panic!("expected evaluate, got {other:?}"),
+        }
+    }
 
     #[test]
     fn parses_train_only_flag() {

@@ -8,12 +8,22 @@ use sentencepiece_model::{
 };
 use tempfile::TempDir;
 
+use super::mingram::{self, Options};
 use super::{
     evaluate::{self, Ratio},
     model::Model,
     records,
 };
 use crate::cancel::CancellationToken;
+
+fn options(vocab_size: usize) -> Options {
+    Options {
+        vocab_size,
+        iterations: 2,
+        max_record_bytes: 1024,
+        quiet: true,
+    }
+}
 
 pub(super) fn proto(pieces: &[&str]) -> ModelProto {
     let mut vocabulary = vec![SentencePiece {
@@ -220,4 +230,388 @@ fn invalid_utf8_is_an_error_not_a_skipped_record() {
     let path = temp.path().join("invalid.txt");
     fs::write(&path, [0xff, b'\n']).unwrap();
     assert!(records::visit(&path, 64, &CancellationToken::default(), |_, _| Ok(())).is_err());
+}
+
+#[test]
+fn mingram_preserves_clusters_and_reduces_known_token_counts() {
+    let temp = TempDir::new().unwrap();
+    let train = temp.path().join("train.txt");
+    let heldout = temp.path().join("heldout.txt");
+    fs::write(&train, "ab\nก้\n中文\nab\nก้\n中文\n").unwrap();
+    fs::write(&heldout, "abก้中文\n中文abก้\n").unwrap();
+    let seed = model(&["a", "b", "ก", "้", "中", "文", "ab", "ก้", "中文", "bก"]);
+    let trained =
+        mingram::train(&seed, &[train], &options(10), &CancellationToken::default()).unwrap();
+    let baseline = model(&["a", "b", "ก", "้", "中", "文", "aa", "bb", "中中"]);
+    let report = evaluate::compare(
+        &baseline,
+        &trained.model,
+        &[heldout],
+        1024,
+        true,
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    assert_eq!(trained.model.proto.pieces.len(), 10);
+    assert_eq!(report.total.counts.baseline.tokens, 12);
+    assert_eq!(report.total.counts.candidate.tokens, 6);
+    assert_eq!(report.total.counts.candidate.raw_round_trip_failures, 0);
+    assert!(trained.model.proto.pieces.iter().any(|p| p.piece() == "ก้"));
+    assert_eq!(trained.report.passes.len(), 4);
+}
+
+#[test]
+fn mingram_improves_bpe_segmentation_without_changing_vocabulary() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("train.txt");
+    fs::write(&path, "abcd\nabcd\n").unwrap();
+    let mut proto = proto(&["a", "b", "c", "d", "ab", "bc", "bcd"]);
+    proto.trainer_spec.as_mut().unwrap().model_type = Some(ModelType::Bpe as i32);
+    proto.pieces[5].score = Some(0.0);
+    proto.pieces[6].score = Some(-1.0);
+    proto.pieces[7].score = Some(-2.0);
+    let seed = Model::from_bytes(&proto.encode_to_vec()).unwrap();
+    assert_eq!(seed.processor.encode("abcd").unwrap().len(), 3);
+    let trained = mingram::train(
+        &seed,
+        std::slice::from_ref(&path),
+        &options(8),
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    let report = evaluate::compare(
+        &seed,
+        &trained.model,
+        &[path],
+        1024,
+        true,
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    assert!(report.same_vocab_size);
+    assert_eq!(report.total.counts.baseline.tokens, 6);
+    assert_eq!(report.total.counts.candidate.tokens, 4);
+    assert_eq!(report.total.counts.candidate.raw_round_trip_failures, 0);
+}
+
+#[test]
+fn comparison_rejects_different_unknown_normalizer_extensions() {
+    use super::wire;
+    let bytes = proto(&["a"]).encode_to_vec();
+    let fields = wire::fields(&bytes).unwrap();
+    let mut normalizer = fields.iter().find(|f| f.tag == 3).unwrap().payload.to_vec();
+    normalizer.extend(wire::message(200, b"new normalization setting"));
+    let bytes_with_extension = wire::patch(&bytes, &[(3, &wire::message(3, &normalizer))]).unwrap();
+    let baseline = Model::from_bytes(&bytes).unwrap();
+    let candidate = Model::from_bytes(&bytes_with_extension).unwrap();
+    assert!(!baseline.same_normalization(&candidate));
+}
+
+#[test]
+fn native_mingram_counts_match_exhaustive_shortest_segmentations() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("train.txt");
+    fs::write(&path, "ab\nabc\nbc\nก้\n中文\n").unwrap();
+    let seed = model(&["a", "b", "c", "ก", "้", "中", "文", "ab", "bc", "ก้", "中文"]);
+    let trained = mingram::train(
+        &seed,
+        &[path],
+        &options(seed.proto.pieces.len()),
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    for text in ["abc", "ababc", "bca", "ก้ก้", "中文中文", "abcก้中文"] {
+        let expected = minimum_tokens(text, &trained.model);
+        assert_eq!(
+            trained.model.processor.encode(text).unwrap().len(),
+            expected,
+            "{text}"
+        );
+    }
+}
+
+fn minimum_tokens(text: &str, model: &Model) -> usize {
+    if text.is_empty() {
+        return 0;
+    }
+    model
+        .proto
+        .pieces
+        .iter()
+        .filter(|p| p.r#type() == Type::Normal)
+        .filter_map(|p| text.strip_prefix(p.piece()))
+        .map(|tail| 1 + minimum_tokens(tail, model))
+        .min()
+        .expect("fixture has complete character coverage")
+}
+
+#[test]
+fn probability_term_selects_frequent_piece_among_equal_token_counts() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("train.txt");
+    fs::write(&path, "ab\nab\nab\nab\nc\nc\nc\nc\nabc\n").unwrap();
+    let seed = model(&["a", "b", "c", "ab", "bc"]);
+    let trained =
+        mingram::train(&seed, &[path], &options(6), &CancellationToken::default()).unwrap();
+    let pieces: Vec<_> = trained
+        .model
+        .processor
+        .encode("abc")
+        .unwrap()
+        .into_iter()
+        .map(|p| p.piece)
+        .collect();
+    assert_eq!(pieces, ["ab", "c"]);
+}
+
+#[test]
+fn nonprefix_reserved_ids_remain_pinned_after_pruning() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("train.txt");
+    fs::write(&path, "abc\n").unwrap();
+    let mut proto = proto(&["a", "b", "<eos>", "ab", "c"]);
+    proto.pieces[3].r#type = Some(Type::Control as i32);
+    proto.trainer_spec.as_mut().unwrap().eos_id = Some(3);
+    proto.trainer_spec.as_mut().unwrap().eos_piece = Some("<eos>".to_owned());
+    let seed = Model::from_bytes(&proto.encode_to_vec()).unwrap();
+    let trained =
+        mingram::train(&seed, &[path], &options(5), &CancellationToken::default()).unwrap();
+    assert_eq!(trained.model.processor.eos_id(), Some(3));
+    assert_eq!(trained.model.proto.pieces[3].piece(), "<eos>");
+    assert_eq!(
+        trained
+            .model
+            .processor
+            .decode_piece_ids(&[1, 2, 4])
+            .unwrap(),
+        "abc"
+    );
+    assert!(trained
+        .report
+        .id_mapping
+        .iter()
+        .any(|m| m.seed_id == 5 && m.output_id == 4));
+}
+
+#[test]
+fn insufficient_coverage_budget_is_rejected() {
+    let seed = model(&["a", "b", "c", "ab"]);
+    let error = mingram::train(
+        &seed,
+        &["unused".into()],
+        &options(3),
+        &CancellationToken::default(),
+    )
+    .err()
+    .unwrap();
+    assert!(error.to_string().contains("protected"));
+}
+
+#[test]
+fn training_rejects_lossy_unknown_encoding() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("train.txt");
+    fs::write(&path, "ab\n").unwrap();
+    let seed = model(&["a"]);
+    let error = mingram::train(&seed, &[path], &options(2), &CancellationToken::default())
+        .err()
+        .unwrap();
+    assert!(format!("{error:#}").contains("unknown IDs"));
+}
+
+pub(super) fn byte_proto() -> ModelProto {
+    let mut proto = proto(&["a", "▁"]);
+    for byte in 0..=255 {
+        proto.pieces.push(SentencePiece {
+            piece: Some(format!("<0x{byte:02X}>")),
+            score: Some(0.0),
+            r#type: Some(Type::Byte as i32),
+        });
+    }
+    let size = proto.pieces.len() as i32;
+    let spec = proto.trainer_spec.as_mut().unwrap();
+    spec.byte_fallback = Some(true);
+    spec.vocab_size = Some(size);
+    proto
+}
+
+#[test]
+fn byte_fallback_is_counted_and_preserved_through_training() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("train.txt");
+    fs::write(&path, "a中\n").unwrap();
+    let seed = Model::from_bytes(&byte_proto().encode_to_vec()).unwrap();
+    let trained = mingram::train(
+        &seed,
+        std::slice::from_ref(&path),
+        &options(seed.proto.pieces.len()),
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    let report = evaluate::compare(
+        &seed,
+        &trained.model,
+        &[path],
+        1024,
+        true,
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    assert_eq!(report.total.counts.candidate.byte_tokens, 3);
+    assert_eq!(report.total.counts.candidate.tokens, 4);
+    assert_eq!(report.total.counts.candidate.unknown_tokens, 0);
+    assert_eq!(report.total.counts.candidate.raw_round_trip_failures, 0);
+    assert_eq!(trained.report.passes.last().unwrap().byte_tokens, 3);
+}
+
+#[test]
+fn model_rewrite_preserves_unknown_extensions_and_removes_stale_self_tests() {
+    use super::wire;
+    let mut proto = proto(&["a", "ab", "b"]);
+    proto.self_test_data = Some(Default::default());
+    let mut bytes = proto.encode_to_vec();
+    bytes.extend(wire::message(200, b"model extension"));
+    let original_trainer = wire::fields(&bytes)
+        .unwrap()
+        .into_iter()
+        .find(|f| f.tag == 2)
+        .unwrap()
+        .payload
+        .to_vec();
+    let mut trainer = original_trainer;
+    trainer.extend(wire::message(201, b"trainer extension"));
+    let trainer = wire::message(2, &trainer);
+    bytes = wire::patch(&bytes, &[(2, &trainer)]).unwrap();
+    let fields = wire::fields(&bytes).unwrap();
+    let mut piece = fields.iter().find(|f| f.tag == 1).unwrap().payload.to_vec();
+    piece.extend(wire::message(202, b"piece extension"));
+    let mut pieces = wire::message(1, &piece);
+    for field in fields.iter().filter(|f| f.tag == 1).skip(1) {
+        pieces.extend_from_slice(field.raw);
+    }
+    bytes = wire::patch(&bytes, &[(1, &pieces)]).unwrap();
+    let seed = Model::from_bytes(&bytes).unwrap();
+    let selected: Vec<_> = seed.proto.pieces.iter().cloned().enumerate().collect();
+    let rewritten = seed.with_pieces(&selected).unwrap();
+    let fields = wire::fields(rewritten.serialized()).unwrap();
+    assert!(fields
+        .iter()
+        .any(|f| f.tag == 200 && f.payload == b"model extension"));
+    assert!(!fields.iter().any(|f| f.tag == 4));
+    let trainer = fields.iter().find(|f| f.tag == 2).unwrap();
+    assert!(wire::fields(trainer.payload)
+        .unwrap()
+        .iter()
+        .any(|f| f.tag == 201));
+    let piece = fields.iter().find(|f| f.tag == 1).unwrap();
+    assert!(wire::fields(piece.payload)
+        .unwrap()
+        .iter()
+        .any(|f| f.tag == 202));
+}
+
+#[test]
+fn export_reloads_and_refuses_to_overwrite_existing_outputs() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("train.txt");
+    fs::write(&path, "ab\n").unwrap();
+    let seed = model(&["a", "b", "ab"]);
+    let trained =
+        mingram::train(&seed, &[path], &options(4), &CancellationToken::default()).unwrap();
+    let output = temp.path().join("output.model");
+    mingram::save(&trained, &output).unwrap();
+    assert!(output.with_extension("vocab").exists());
+    assert!(output.with_extension("mingram.json").exists());
+    let loaded = Model::load(&output).unwrap();
+    assert_eq!(loaded.processor.encode("ab").unwrap().len(), 1);
+    assert!(mingram::save(&trained, &output).is_err());
+}
+
+#[test]
+#[ignore = "requires the uv-managed Python SentencePiece runtime; included in just check"]
+fn python_runtime_compatibility() {
+    use std::process::{Command, Stdio};
+    let temp = TempDir::new().unwrap();
+    let corpus = temp.path().join("train.txt");
+    let prefix = temp.path().join("seed");
+    fs::write(
+        &corpus,
+        "ab ab ab\nก้กา ก้กา\n中文 中文\nالعربية\nहिन्दी\n𠀀\n",
+    )
+    .unwrap();
+    let output = Command::new("uv").args(["run", "--no-sync", "python", "-c",
+        "import sentencepiece as sp,sys; sp.SentencePieceTrainer.train(input=sys.argv[1],model_prefix=sys.argv[2],model_type='bpe',vocab_size=64,hard_vocab_limit=False,character_coverage=1.0,normalization_rule_name='identity',add_dummy_prefix=False,remove_extra_whitespaces=False,minloglevel=2)"])
+        .arg(&corpus).arg(&prefix).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let seed = Model::load(&prefix.with_extension("model")).unwrap();
+    let required = seed
+        .proto
+        .pieces
+        .iter()
+        .filter(|p| p.r#type() != Type::Normal || p.piece().chars().count() == 1)
+        .count();
+    let target = (required + 4).min(seed.proto.pieces.len());
+    let trained = mingram::train(
+        &seed,
+        &[corpus],
+        &options(target),
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    let model_path = temp.path().join("mingram.model");
+    mingram::save(&trained, &model_path).unwrap();
+    let samples = ["ab ก้กา 中文", "العربية", "हिन्दी", "  ab  ", "𠀀"];
+    let counts: Vec<_> = samples
+        .iter()
+        .map(|text| trained.model.processor.encode(text).unwrap().len())
+        .collect();
+    let mut child = Command::new("uv")
+        .args([
+            "run",
+            "--no-sync",
+            "python",
+            "-c",
+            r#"
+import json, sys
+import sentencepiece as sp
+data = json.load(sys.stdin)
+model = sp.SentencePieceProcessor(model_file=sys.argv[1])
+assert model.get_piece_size() == data['vocab_size']
+for text, expected in zip(data['samples'], data['counts']):
+    ids = model.encode(text, out_type=int)
+    assert len(ids) == expected, (text, ids, expected)
+    assert model.decode(ids) == text, (text, model.decode(ids))
+"#,
+        ])
+        .arg(&model_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    #[derive(serde::Serialize)]
+    struct Expected<'a> {
+        samples: &'a [&'a str],
+        counts: Vec<usize>,
+        vocab_size: usize,
+    }
+    serde_json::to_writer(
+        child.stdin.take().unwrap(),
+        &Expected {
+            samples: &samples,
+            counts,
+            vocab_size: target,
+        },
+    )
+    .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

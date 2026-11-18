@@ -71,7 +71,7 @@ just train
 Or directly:
 
 ```sh
-RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=native" CFLAGS="${CFLAGS:-} -march=native" cargo run --release -- train --config cfg.json
+RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=native" CFLAGS="${CFLAGS:-} -march=native" uv run cargo run --release -- train --config cfg.json
 ```
 
 Press Ctrl+C to stop a run. During SentencePiece training, `spm-ocr` also stops the Python
@@ -103,7 +103,50 @@ where applicable and SentencePiece 0.2.2 defaults otherwise.
 - `work_dir/trainer_request.json`: replayable trainer request.
 - `work_dir/trainer_output.json`: trainer status and artifact paths.
 
-## Development
+## MinGram training
+
+Reduce an existing BPE or Unigram candidate vocabulary using Rust MinGram training:
+
+```sh
+just cargo-run mingram --seed-model seed.model --input train.txt --output runs/mingram.model --vocab-size 8192
+```
+
+Or automatically generate a BPE seed through the existing trainer bridge:
+
+```sh
+just cargo-run mingram --config cfg.json --input train.txt --output runs/mingram.model --vocab-size 8192
+```
+
+Automatic seeding uses the configuration's SentencePiece settings and a seed vocabulary of
+`ceil(1.15 * target_size)`, saving its artifacts under `runs/mingram.seed/`. Both modes use the
+specified UTF-8 files directly, without OCR repair or language balancing. A BPE seed follows
+the paper's initialization; importing an existing Unigram model is an additional adaptation.
+The initial native BPE trainer has its own memory and sentence-sampling behavior. Rust MinGram
+passes stream the files, keeping vocabulary counts and one bounded record in memory.
+
+MinGram initializes probabilities from a seed-encoding pass, then runs two hard-EM passes
+(`--iterations` overrides this). It uses the reference score `-1 + 0.00001 * log_probability`,
+then prunes by usage counts, which rank the same as unrounded probabilities. Zero-use normal
+pieces retain a finite log-probability floor of -100; they may fill otherwise unused slots to
+preserve an exact vocabulary budget. Every single-code-point piece and non-normal piece is
+protected. Reserved IDs stay fixed; other IDs may change. An impossible coverage budget or
+reserved ID outside the target size is an error. Large reductions such as 100K to 8K are
+supported, but single-step pruning may be worse than starting from a modestly oversized seed.
+
+The command writes `mingram.model`, `mingram.vocab`, and `mingram.mingram.json`, refusing to
+overwrite existing outputs. The report contains model hashes, pass statistics, and the complete
+seed-to-output ID mapping. Training rejects unknown IDs and normalized reconstruction loss.
+Use `--json` for the report on stdout and `--quiet` to disable progress. Check compression on
+separate held-out files with `evaluate`; training-set savings do not establish generalization.
+
+This is a SentencePiece-compatible adaptation of
+[MinGram](https://arxiv.org/abs/2606.27019), not the reference SCRIPT tokenizer. Native
+SentencePiece normalization, special-symbol scoring, byte fallback, float32 arithmetic, and
+tie-breaking are retained. Scores favor fewer tokens but do not guarantee lexicographic
+minimum-token segmentation on arbitrarily long inputs or minimize the expanded byte-fallback
+ID count. No custom inference code is needed. See [module details](src/tokenizer/README.md).
+
+## Tokenizer evaluation
 
 Compare two standard SentencePiece models on the same held-out text:
 
@@ -133,6 +176,8 @@ metrics, not language-model perplexity or evidence of improved downstream accura
 Native encoding uses the standard SentencePiece C++ runtime through Rust bindings. Cargo builds
 the pinned bundled runtime statically. `just` commands use the project's existing uv environment
 to supply CMake automatically; they do not require changes to SentencePiece's C++ source.
+
+## Development
 
 ```sh
 just check
