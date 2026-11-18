@@ -183,6 +183,16 @@ Read the [demo decision report](demos/mingram/REPORT.md) for the measured gains,
 text provenance, and limits. The demo builds the Rust executable and trains all models;
 it requires no existing tokenizer or corpus download.
 
+Compare NFC and NFD preprocessing on the same committed corpus:
+
+```sh
+uv run --locked demos/mingram/compare_normalization.py
+```
+
+The [normalization report](demos/mingram/NORMALIZATION_REPORT.md) separates normalized-text
+reconstruction from original-text preservation and includes a larger piece-limit control.
+These experimental models use externally normalized input; NFC/NFD are not embedded in them.
+
 Compare two standard SentencePiece models on the same held-out text:
 
 ```sh

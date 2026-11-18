@@ -34,3 +34,28 @@ training workflow, with optional positive `mingram.iterations` defaulting to 2. 
 algorithm value keeps MinGram options out of the BPE configuration. The Python bridge
 receives BPE seed requests only. Synthetic end-to-end testing verifies the config-driven
 seed, Rust optimizer, final model, ID mapping, and training reports.
+
+## NFC versus NFD
+
+The normalization experiment uses NFC and NFD copies of the same committed text, with
+512-piece final models and 589-piece BPE seeds for MinGram. Normalization is external
+Python preprocessing; exported SentencePiece models retain identity normalization.
+The original source text and training algorithm are unchanged.
+
+MinGram emits 31,429 tokens under NFC and 34,797 under NFD: 10.72% more with NFD.
+BPE also emits more tokens under NFD. The training alphabet shrinks from 240 to 227
+code points, showing that alphabet size alone does not predict output token count.
+Repeating at a 64-code-point piece limit yields the same MinGram totals as the default
+16-code-point limit. Thus this particular difference is not removed by that control.
+
+All tested models exactly reconstruct their normalized input and emit no unknown IDs.
+NFC changes no original held-out records; NFD changes 1,098. Original text preservation
+and normalized reconstruction are reported separately. Some groups, including Thai,
+are unchanged by NFC/NFD but acquire different token counts as the shared vocabulary
+changes. The report and structured evidence are committed beside this log.
+
+Small Unigram count variations can occur between runs, including under the locked wheel;
+the report records one actual run rather than promising bit-identical learned vocabularies.
+Natural-text effects, deployment normalization support, and downstream quality remain
+unproven. Both the original demo and normalization runner were executed after extracting
+their shared training/evaluation helpers.

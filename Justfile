@@ -15,7 +15,7 @@ check:
     uv run cargo clippy --all-targets --all-features -- -D warnings
     RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=native" CFLAGS="${CFLAGS:-} -march=native" uv run cargo build --release
     uv run ruff check .
-    uv run --with pyrefly --with pydantic-settings pyrefly check
+    uv run --with pyrefly --with pydantic-settings pyrefly check --search-path demos/mingram
 
 fmt:
     cargo fmt --all

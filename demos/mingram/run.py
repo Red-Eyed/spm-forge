@@ -100,16 +100,12 @@ class Settings(BaseSettings):
         artifacts = REPO / "target/mingram-demo"
         artifacts.mkdir(parents=True, exist_ok=True)
         output = Path(tempfile.mkdtemp(prefix="run-", dir=artifacts))
-        subprocess.run(
-            ["cargo", "build", "--release", "--locked"], cwd=REPO, check=True
-        )
-        train_baselines(output)
-        binary = (
-            REPO / "target/release" / ("spm-ocr.exe" if os.name == "nt" else "spm-ocr")
-        )
-        train_mingram(binary, output, self.quiet)
-        bpe = evaluate(binary, output, "bpe", manifest, self.quiet)
-        unigram = evaluate(binary, output, "unigram", manifest, self.quiet)
+        binary = build_binary()
+        data = DEMO / "data"
+        train_baselines(output, data)
+        train_mingram(binary, output, self.quiet, data)
+        bpe = evaluate(binary, output, "bpe", manifest, self.quiet, data)
+        unigram = evaluate(binary, output, "unigram", manifest, self.quiet, data)
         report = decision_report(bpe, unigram)
         path = output / "REPORT.md"
         path.write_text(report, encoding="utf-8")
@@ -131,7 +127,13 @@ def verify_inputs(manifest: Manifest) -> None:
             raise ValueError(f"training and held-out records overlap: {path}")
 
 
-def train_baselines(output: Path) -> None:
+def build_binary() -> Path:
+    """Build the locked Rust implementation and return its executable path."""
+    subprocess.run(["cargo", "build", "--release", "--locked"], cwd=REPO, check=True)
+    return REPO / "target/release" / ("spm-ocr.exe" if os.name == "nt" else "spm-ocr")
+
+
+def train_baselines(output: Path, data: Path, max_piece_length: int = 16) -> None:
     """Train equal-budget baselines and the modestly oversized BPE seed."""
     for name, kind, size in (
         ("bpe", "bpe", 512),
@@ -140,7 +142,7 @@ def train_baselines(output: Path) -> None:
     ):
         print(f"Training {name}: {size} pieces", flush=True)
         sp.SentencePieceTrainer.train(
-            input=str(DEMO / "data/train.txt"),
+            input=str(data / "train.txt"),
             model_prefix=str(output / name),
             model_type=kind,
             vocab_size=size,
@@ -149,7 +151,7 @@ def train_baselines(output: Path) -> None:
             add_dummy_prefix=False,
             remove_extra_whitespaces=False,
             byte_fallback=False,
-            max_sentencepiece_length=16,
+            max_sentencepiece_length=max_piece_length,
             input_sentence_size=0,
             shuffle_input_sentence=False,
             num_threads=1,
@@ -157,7 +159,7 @@ def train_baselines(output: Path) -> None:
         )
 
 
-def train_mingram(binary: Path, output: Path, quiet: bool) -> None:
+def train_mingram(binary: Path, output: Path, quiet: bool, data: Path) -> None:
     """Invoke the actual Rust MinGram command and retain its training report."""
     command = [
         str(binary),
@@ -166,7 +168,7 @@ def train_mingram(binary: Path, output: Path, quiet: bool) -> None:
         "--seed-model",
         str(output / "seed.model"),
         "--input",
-        str(DEMO / "data/train.txt"),
+        str(data / "train.txt"),
         "--output",
         str(output / "mingram.model"),
         "--vocab-size",
@@ -179,11 +181,16 @@ def train_mingram(binary: Path, output: Path, quiet: bool) -> None:
 
 
 def evaluate(
-    binary: Path, output: Path, baseline: str, manifest: Manifest, quiet: bool
+    binary: Path,
+    output: Path,
+    baseline: str,
+    manifest: Manifest,
+    quiet: bool,
+    data: Path,
 ) -> Evaluation:
     """Run the Rust evaluator, preserving the full JSON evidence."""
     tests = [
-        str(DEMO / "data" / item.path)
+        str(data / item.path)
         for item in manifest.files
         if item.path.name != "train.txt"
     ]
