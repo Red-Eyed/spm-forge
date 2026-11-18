@@ -29,6 +29,32 @@ OCR-specific repair and balancing presets remain available.
 5. Train MinGram and a same-size BPE baseline on the training partition.
 6. Evaluate both on held-out text and write the model, vocabulary, and reports under `work_dir/`.
 
+## Repair throughput
+
+Repair workers classify each output chunk in parallel. The ordered writer caches each
+shard's filename and counter with its open file, avoiding per-line filename hashing and
+linear summary searches. Thread count still comes from `num_threads`.
+
+A local ARM64 macOS release benchmark compared `af8b4bd` with this optimization on
+102,380,032 bytes: 128 repetitions of the committed eight-language
+`demos/mingram/data/train.txt`. Two alternating runs per binary, using eight threads and
+local temporary storage, timed the fixing-stage progress boundaries:
+
+| Implementation | Fixing time | Input throughput |
+|---|---:|---:|
+| Before | 3.975–3.996 s | 25.6–25.8 MB/s |
+| Parallel classification and cached shard state | 0.861–0.871 s | 117.5–119.0 MB/s |
+
+This is approximately 4.6× faster for this repeated synthetic input. Audit-text hashes,
+issue logs, and train/test record multisets matched across all four runs. Existing
+random tie-breaking between equally frequent scripts can change Japanese script-shard
+assignments even between two runs of the old binary; this change retains that behavior.
+Tests also verify per-shard ordering and counters across batches and thread counts.
+
+These are fixing-stage measurements with filesystem caching, not full training times or
+an HPC storage benchmark. The audit copy and intermediate corpus writes still exist;
+shared-storage throughput can limit gains on HPC.
+
 ## Usage
 
 Minimal `cfg.json`:

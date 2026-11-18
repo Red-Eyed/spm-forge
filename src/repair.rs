@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
@@ -223,14 +224,33 @@ impl RepairPaths {
 
 struct RepairWriter<'a> {
     test_dir: PathBuf,
-    test_writers: HashMap<BucketKey, BufWriter<File>>,
+    test_writers: HashMap<BucketKey, ShardWriter>,
     output: BufWriter<File>,
     issues: BufWriter<File>,
     config: &'a EffectiveConfig,
     corpus_root: PathBuf,
     summary: RepairSummary,
     shard_dir: PathBuf,
-    shard_writers: HashMap<BucketKey, BufWriter<File>>,
+    shard_writers: HashMap<BucketKey, ShardWriter>,
+}
+
+struct ShardWriter {
+    output: BufWriter<File>,
+    summary: ShardSummary,
+}
+
+impl ShardWriter {
+    fn write_line(&mut self, text: &str) -> Result<(), RepairError> {
+        self.output
+            .write_all(text.as_bytes())
+            .and_then(|_| self.output.write_all(b"\n"))
+            .map_err(|source| RepairError::Write {
+                path: self.summary.path.clone(),
+                source,
+            })?;
+        self.summary.lines += 1;
+        Ok(())
+    }
 }
 
 struct RawLine {
@@ -241,7 +261,12 @@ struct RawLine {
 struct ProcessedLine {
     partition: Partition,
     issues: Vec<CorpusIssue>,
-    output_lines: Vec<String>,
+    output_lines: Vec<ClassifiedLine>,
+}
+
+struct ClassifiedLine {
+    text: String,
+    bucket: BucketKey,
 }
 
 impl<'a> RepairWriter<'a> {
@@ -373,23 +398,19 @@ impl<'a> RepairWriter<'a> {
 
         let processed_chunks = chunks
             .into_par_iter()
-            .map(|chunk| process_raw_chunk(self.config, path, chunk, cancellation))
+            .map(|chunk| process_raw_chunk(self.config, path, source_hints, chunk, cancellation))
             .collect::<Result<Vec<_>, RepairError>>()?;
         for chunk in processed_chunks {
             cancellation.check()?;
             for line in chunk {
                 cancellation.check()?;
-                self.apply_processed_line(source_hints, line)?;
+                self.apply_processed_line(line)?;
             }
         }
         Ok(())
     }
 
-    fn apply_processed_line(
-        &mut self,
-        source_hints: &SourceHints,
-        line: ProcessedLine,
-    ) -> Result<(), RepairError> {
+    fn apply_processed_line(&mut self, line: ProcessedLine) -> Result<(), RepairError> {
         for issue in line.issues {
             match issue.action {
                 IssueAction::Fixed => self.summary.lines_fixed += 1,
@@ -405,73 +426,53 @@ impl<'a> RepairWriter<'a> {
             }
         }
         for chunk in line.output_lines {
-            self.write_line(source_hints, &chunk, line.partition)?;
+            self.write_line(chunk, line.partition)?;
         }
         Ok(())
     }
 
     fn write_line(
         &mut self,
-        source_hints: &SourceHints,
-        line: &str,
+        line: ClassifiedLine,
         partition: Partition,
     ) -> Result<(), RepairError> {
         self.output
-            .write_all(line.as_bytes())
+            .write_all(line.text.as_bytes())
             .and_then(|_| self.output.write_all(b"\n"))
             .map_err(|source| RepairError::Write {
                 path: self.summary.fixed_corpus.clone(),
                 source,
             })?;
         self.summary.lines_written += 1;
-        self.write_shard_line(source_hints, line, partition)
+        self.write_shard_line(line, partition)
     }
 
     fn write_shard_line(
         &mut self,
-        source_hints: &SourceHints,
-        line: &str,
+        line: ClassifiedLine,
         partition: Partition,
     ) -> Result<(), RepairError> {
-        let bucket = classify_line_with_hints(source_hints, line);
-        let (writers, shards, dir) = match partition {
-            Partition::Train => (
-                &mut self.shard_writers,
-                &mut self.summary.shards,
-                &self.shard_dir,
-            ),
-            Partition::Test => (
-                &mut self.test_writers,
-                &mut self.summary.test_shards,
-                &self.test_dir,
-            ),
+        let (writers, dir) = match partition {
+            Partition::Train => (&mut self.shard_writers, &self.shard_dir),
+            Partition::Test => (&mut self.test_writers, &self.test_dir),
         };
-        let shard_path = dir.join(shard_file_name(&bucket));
-        if !writers.contains_key(&bucket) {
-            let writer = open_writer(&shard_path)?;
-            writers.insert(bucket.clone(), writer);
-            shards.push(ShardSummary {
-                bucket: bucket.clone(),
-                path: shard_path,
-                lines: 0,
-            });
-        }
-
-        let writer = writers.get_mut(&bucket).expect("shard writer was inserted");
-        writer
-            .write_all(line.as_bytes())
-            .and_then(|_| writer.write_all(b"\n"))
-            .map_err(|source| RepairError::Write {
-                path: dir.join(shard_file_name(&bucket)),
-                source,
-            })?;
-
-        let shard = shards
-            .iter_mut()
-            .find(|shard| shard.bucket == bucket)
-            .expect("shard summary was inserted");
-        shard.lines += 1;
-        Ok(())
+        let writer = match writers.entry(line.bucket) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let path = dir.join(shard_file_name(entry.key()));
+                let output = open_writer(&path)?;
+                let bucket = entry.key().clone();
+                entry.insert(ShardWriter {
+                    output,
+                    summary: ShardSummary {
+                        bucket,
+                        path,
+                        lines: 0,
+                    },
+                })
+            }
+        };
+        writer.write_line(&line.text)
     }
 
     fn write_issue(&mut self, issue: CorpusIssue) -> Result<(), RepairError> {
@@ -488,15 +489,7 @@ impl<'a> RepairWriter<'a> {
     }
 
     fn finish(mut self) -> Result<RepairSummary, RepairError> {
-        for (bucket, mut writer) in self.test_writers {
-            writer.flush().map_err(|source| RepairError::Write {
-                path: self.test_dir.join(shard_file_name(&bucket)),
-                source,
-            })?;
-        }
-        self.summary
-            .test_shards
-            .sort_by(|a, b| a.bucket.cmp(&b.bucket));
+        self.summary.test_shards = finish_shards(self.test_writers)?;
         self.output.flush().map_err(|source| RepairError::Write {
             path: self.summary.fixed_corpus.clone(),
             source,
@@ -505,17 +498,24 @@ impl<'a> RepairWriter<'a> {
             path: self.summary.issue_log.clone(),
             source,
         })?;
-        for (bucket, mut writer) in self.shard_writers {
-            writer.flush().map_err(|source| RepairError::Write {
-                path: self.shard_dir.join(shard_file_name(&bucket)),
-                source,
-            })?;
-        }
-        self.summary
-            .shards
-            .sort_by(|left, right| left.bucket.cmp(&right.bucket));
+        self.summary.shards = finish_shards(self.shard_writers)?;
         Ok(self.summary)
     }
+}
+
+fn finish_shards(
+    writers: HashMap<BucketKey, ShardWriter>,
+) -> Result<Vec<ShardSummary>, RepairError> {
+    let mut summaries = Vec::with_capacity(writers.len());
+    for (_, mut writer) in writers {
+        writer.output.flush().map_err(|source| RepairError::Write {
+            path: writer.summary.path.clone(),
+            source,
+        })?;
+        summaries.push(writer.summary);
+    }
+    summaries.sort_by(|a, b| a.bucket.cmp(&b.bucket));
+    Ok(summaries)
 }
 
 fn repair_batch_chunks(num_threads: u32) -> usize {
@@ -533,18 +533,24 @@ fn push_nonempty_chunk(chunks: &mut Vec<Vec<RawLine>>, chunk: Vec<RawLine>) {
 fn process_raw_chunk(
     config: &EffectiveConfig,
     path: &Path,
+    source_hints: &SourceHints,
     chunk: Vec<RawLine>,
     cancellation: &CancellationToken,
 ) -> Result<Vec<ProcessedLine>, RepairError> {
     let mut processed = Vec::with_capacity(chunk.len());
     for line in chunk {
         cancellation.check()?;
-        processed.push(process_raw_line(config, path, line));
+        processed.push(process_raw_line(config, path, source_hints, line));
     }
     Ok(processed)
 }
 
-fn process_raw_line(config: &EffectiveConfig, path: &Path, raw: RawLine) -> ProcessedLine {
+fn process_raw_line(
+    config: &EffectiveConfig,
+    path: &Path,
+    source_hints: &SourceHints,
+    raw: RawLine,
+) -> ProcessedLine {
     let text = match String::from_utf8(raw.bytes) {
         Ok(text) => text,
         Err(error) => {
@@ -634,7 +640,13 @@ fn process_raw_line(config: &EffectiveConfig, path: &Path, raw: RawLine) -> Proc
     ProcessedLine {
         partition,
         issues,
-        output_lines: chunks,
+        output_lines: chunks
+            .into_iter()
+            .map(|text| ClassifiedLine {
+                bucket: classify_line_with_hints(source_hints, &text),
+                text,
+            })
+            .collect(),
     }
 }
 
@@ -812,6 +824,85 @@ mod tests {
     use crate::corpus::{CorpusSourceIssue, CorpusSourceIssueId};
 
     use super::*;
+
+    #[test]
+    fn classifies_each_output_chunk_in_the_worker() {
+        let mut config = config(Path::new("unused"), Path::new("raw.txt"));
+        config.sentencepiece.max_sentence_length = 13;
+        let hints = SourceHints::from_path(Path::new("vendor/en/raw.txt"));
+        let processed = process_raw_line(
+            &config,
+            Path::new("raw.txt"),
+            &hints,
+            RawLine {
+                line_number: 1,
+                bytes: "中文中文 hello".as_bytes().to_vec(),
+            },
+        );
+        assert_eq!(processed.output_lines.len(), 2);
+        assert_eq!(processed.output_lines[0].text, "中文中文 ");
+        assert_eq!(processed.output_lines[0].bucket.script, "han");
+        assert_eq!(processed.output_lines[1].text, "hello");
+        assert_eq!(processed.output_lines[1].bucket.script, "latin");
+        assert!(processed
+            .output_lines
+            .iter()
+            .all(|line| line.bucket.language_hint == "en"));
+    }
+
+    #[test]
+    fn parallel_shards_preserve_order_counts_and_partitions_across_batches() {
+        let temp = TempDir::new().unwrap();
+        let input = temp.path().join("raw.txt");
+        let text: String = (0..(REPAIR_LINES_PER_CHUNK * 2 + 13))
+            .map(|i| {
+                if i % 2 == 0 {
+                    format!("hello {i}\n")
+                } else {
+                    format!("中文 {i}\n")
+                }
+            })
+            .collect();
+        fs::write(&input, &text).unwrap();
+        let corpus = DiscoveredCorpus {
+            root: input.clone(),
+            files: vec![input.clone()],
+            issues: vec![],
+        };
+        let mut snapshots = Vec::new();
+        for threads in [1, 4] {
+            let mut config = config(&temp.path().join(format!("run-{threads}")), &input);
+            config.num_threads = threads;
+            config.evaluation.test_fraction = 0.5;
+            let summary = repair_corpus(
+                &config,
+                &corpus,
+                &ProgressReporter::silent(),
+                &CancellationToken::default(),
+            )
+            .unwrap();
+            assert_eq!(fs::read_to_string(&summary.fixed_corpus).unwrap(), text);
+            assert_eq!(
+                summary.lines_written,
+                summary
+                    .shards
+                    .iter()
+                    .chain(&summary.test_shards)
+                    .map(|s| s.lines)
+                    .sum::<u64>()
+            );
+            let mut snapshot = Vec::new();
+            for (partition, shards) in [(0, &summary.shards), (1, &summary.test_shards)] {
+                for shard in shards {
+                    let contents = fs::read_to_string(&shard.path).unwrap();
+                    assert_eq!(shard.lines, contents.lines().count() as u64);
+                    snapshot.push((partition, shard.bucket.clone(), contents));
+                }
+            }
+            snapshots.push(snapshot);
+        }
+        assert_eq!(snapshots[0], snapshots[1]);
+    }
 
     fn config(work_dir: &Path, corpus_path: &Path) -> EffectiveConfig {
         EffectiveConfig {
