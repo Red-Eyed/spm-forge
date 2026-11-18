@@ -457,6 +457,7 @@ fn byte_fallback_is_counted_and_preserved_through_training() {
         &CancellationToken::default(),
     )
     .unwrap();
+    assert_eq!(report.total.counts.candidate.records_with_byte_fallback, 1);
     assert_eq!(report.total.counts.candidate.byte_tokens, 3);
     assert_eq!(report.total.counts.candidate.tokens, 4);
     assert_eq!(report.total.counts.candidate.unknown_tokens, 0);

@@ -3,6 +3,7 @@ mod cancel;
 mod cli;
 mod config;
 mod corpus;
+mod corpus_split;
 mod normalize;
 mod progress;
 mod repair;

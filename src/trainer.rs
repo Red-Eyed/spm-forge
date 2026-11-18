@@ -436,6 +436,7 @@ pub(crate) mod tests {
 
     pub(crate) fn config(work_dir: &Path) -> EffectiveConfig {
         EffectiveConfig {
+            evaluation: crate::config::EvaluationConfig::default(),
             preset: "ocr_multilingual".to_owned(),
             num_threads: 16,
             corpus: CorpusConfig { path: "raw".into() },

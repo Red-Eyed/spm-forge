@@ -45,3 +45,13 @@ behavior, or user-defined symbol sets are rejected conservatively. Model hashes 
 exact artifacts. Equal vocabulary size and zero information loss are necessary before treating
 lower held-out counts as an algorithm improvement. Downstream model quality requires separate
 evaluation.
+
+
+The configured training workflow now splits canonical records before chunking and evaluates
+on saved held-out shards. `report.rs` renders its paired result as Markdown and JSON with split
+and configuration provenance. The evaluator keeps a histogram bounded by the configured
+record limit and a set bounded by vocabulary size, rather than a token count per input record.
+Global percentiles merge histograms; global utilization takes the union of IDs, not the sum of
+per-shard counts. Code points/token uses prepared source code points, and P50/P95 use nearest
+rank. Automatic training compares MinGram with a separately fitted BPE model at the same total
+vocabulary budget; a BPE configuration compares its model with itself.

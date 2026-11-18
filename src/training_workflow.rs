@@ -9,9 +9,49 @@ use serde::Serialize;
 
 use crate::cancel::CancellationToken;
 use crate::config::{EffectiveConfig, MingramConfig, TrainingAlgorithm};
+use crate::corpus_split::SplitManifest;
 use crate::progress::ProgressReporter;
 use crate::tokenizer::{mingram, model::Model};
 use crate::trainer::{self, TrainerOutput, TrainerPaths};
+
+/// Fits both models on training files only, then evaluates on the saved test partition.
+pub fn train_and_report(
+    config: &EffectiveConfig,
+    split: &SplitManifest,
+    progress: &ProgressReporter,
+    cancellation: &CancellationToken,
+) -> Result<TrainerOutput> {
+    let inputs = split.train_paths();
+    let output = train(config, &inputs, progress, cancellation)?;
+    let baseline = match config.sentencepiece.algorithm {
+        TrainingAlgorithm::Bpe => output.model.clone(),
+        TrainingAlgorithm::Mingram { .. } => {
+            let mut baseline = config.clone();
+            baseline.sentencepiece.algorithm = TrainingAlgorithm::Bpe;
+            baseline.output.work_dir = config
+                .output
+                .work_dir
+                .join(format!("{}.baseline", config.output.model_prefix));
+            baseline.output.model_prefix = "bpe".into();
+            trainer::train_sentencepiece(&baseline, &inputs, progress, cancellation)?.model
+        }
+    };
+    cancellation.check()?;
+    let stage = progress.stage("evaluating tokenizer on held-out records");
+    let before = Model::load(&baseline)?;
+    let after = Model::load(&output.model)?;
+    let report = crate::tokenizer::evaluate::compare(
+        &before,
+        &after,
+        &split.test_paths(),
+        config.sentencepiece.max_sentence_length as usize,
+        true,
+        cancellation,
+    )?;
+    let path = crate::tokenizer::report::write(config, split, &baseline, &output.model, &report)?;
+    stage.finish(format!("tokenizer report: {}", path.display()));
+    Ok(output)
+}
 
 pub fn train(
     config: &EffectiveConfig,
@@ -176,13 +216,38 @@ mod tests {
         config.sentencepiece.user_defined_symbols.clear();
         config.sentencepiece.input_sentence_size = 0;
         config.num_threads = 1;
-        let output = train(
-            &config,
+        let test = temp.path().join("test.txt");
+        fs::write(&test, "alpha delta beta\n中文文字\nก้กี\n").unwrap();
+        let split = SplitManifest::create(
             &[input],
+            &[test],
+            config.evaluation.clone(),
+            "test-settings".into(),
+            5,
+            3,
+            &CancellationToken::default(),
+        )
+        .unwrap();
+        let output = train_and_report(
+            &config,
+            &split,
             &ProgressReporter::silent(),
             &CancellationToken::default(),
         )
         .unwrap();
+        let report_path = config.output.work_dir.join("reports/tokenizer.json");
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(report_path).unwrap()).unwrap();
+        assert_eq!(report["evaluation"]["total"]["counts"]["records"], 3);
+        assert_eq!(report["evaluation"]["same_vocab_size"], true);
+        assert_eq!(
+            report["evaluation"]["total"]["counts"]["candidate"]["raw_round_trip_failures"],
+            0
+        );
+        let markdown =
+            fs::read_to_string(config.output.work_dir.join("reports/tokenizer.md")).unwrap();
+        assert!(markdown.contains("Evaluation checks: PASS"));
+        assert!(markdown.contains("P95 tokens per record"));
         let model = Model::load(&output.model).unwrap();
         assert_eq!(model.proto.pieces.len(), 32);
         assert_eq!(

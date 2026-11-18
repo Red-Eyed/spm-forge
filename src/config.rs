@@ -36,6 +36,8 @@ pub enum ConfigError {
 #[serde(deny_unknown_fields)]
 pub struct RawConfig {
     #[serde(default)]
+    pub evaluation: EvaluationConfig,
+    #[serde(default)]
     pub preset: Option<String>,
     #[serde(default)]
     pub num_threads: Option<u32>,
@@ -93,6 +95,7 @@ pub struct PresetConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct EffectiveConfig {
+    pub evaluation: EvaluationConfig,
     pub preset: String,
     pub num_threads: u32,
     pub corpus: CorpusConfig,
@@ -150,7 +153,24 @@ pub enum StripRule {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SoftHyphenPolicy {
+    Preserve,
     LineFinalToHyphenMidlineStrip,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct EvaluationConfig {
+    pub test_fraction: f64,
+    pub split_seed: u64,
+}
+
+impl Default for EvaluationConfig {
+    fn default() -> Self {
+        Self {
+            test_fraction: 0.05,
+            split_seed: 42,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -387,6 +407,14 @@ pub fn expand_config(
     raw: RawConfig,
     catalog: &PresetCatalog,
 ) -> Result<EffectiveConfig, ConfigError> {
+    if !raw.evaluation.test_fraction.is_finite()
+        || !(0.0 < raw.evaluation.test_fraction && raw.evaluation.test_fraction < 1.0)
+    {
+        return Err(ConfigError::InvalidPresetField {
+            field: "evaluation.test_fraction",
+            reason: "must be strictly between zero and one",
+        });
+    }
     let preset_name = raw
         .preset
         .clone()
@@ -397,7 +425,7 @@ pub fn expand_config(
     apply_preset(&preset_name, catalog, &mut stack, &mut builder)?;
     builder.apply_raw_overrides(&raw);
 
-    builder.into_effective(preset_name, raw.corpus, raw.output)
+    builder.into_effective(preset_name, raw.corpus, raw.output, raw.evaluation)
 }
 
 fn read_json<T>(path: &Path) -> Result<T, ConfigError>
@@ -462,8 +490,10 @@ impl ConfigBuilder {
         preset: String,
         corpus: CorpusConfig,
         output: OutputConfig,
+        evaluation: EvaluationConfig,
     ) -> Result<EffectiveConfig, ConfigError> {
         Ok(EffectiveConfig {
+            evaluation,
             preset,
             num_threads: require_positive_threads(self.num_threads)?,
             corpus,
@@ -740,6 +770,16 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_holdout_fractions() {
+        let raw: RawConfig = serde_json::from_str(include_str!("../cfg.json")).unwrap();
+        for fraction in [0.0, 1.0, -0.1, f64::NAN, f64::INFINITY] {
+            let mut invalid = raw.clone();
+            invalid.evaluation.test_fraction = fraction;
+            assert!(expand_config(invalid, &catalog()).is_err());
+        }
+    }
+
+    #[test]
     fn mingram_selection_defaults_and_options_are_typed() {
         let mut config = catalog()
             .presets
@@ -809,6 +849,7 @@ mod tests {
     #[test]
     fn expands_default_preset() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: None,
             num_threads: None,
             corpus: CorpusConfig {
@@ -826,9 +867,19 @@ mod tests {
 
         let effective = expand_config(raw, &catalog()).expect("default preset expands");
 
-        assert_eq!(effective.preset, "ocr_multilingual");
+        assert_eq!(effective.preset, "multilingual_mingram");
+        assert_eq!(effective.sentencepiece.vocab_size, 8192);
+        assert!(!effective.balancing.enabled);
+        assert_eq!(
+            effective.canonicalization.soft_hyphen,
+            SoftHyphenPolicy::Preserve
+        );
+        assert_eq!(effective.evaluation.test_fraction, 0.05);
         assert_eq!(effective.num_threads, 16);
-        assert_eq!(effective.sentencepiece.algorithm, TrainingAlgorithm::Bpe);
+        assert!(matches!(
+            effective.sentencepiece.algorithm,
+            TrainingAlgorithm::Mingram { .. }
+        ));
         assert!(effective.sentencepiece.byte_fallback);
         assert_eq!(effective.validation.line_policy, LinePolicy::FixOrSkip);
     }
@@ -836,6 +887,7 @@ mod tests {
     #[test]
     fn child_preset_replaces_list_values() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: Some("ocr_math_heavy".to_owned()),
             num_threads: None,
             corpus: CorpusConfig {
@@ -863,6 +915,7 @@ mod tests {
     #[test]
     fn user_overrides_preset_field() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: Some("ocr_cjk_heavy".to_owned()),
             num_threads: Some(8),
             corpus: CorpusConfig {
@@ -895,9 +948,16 @@ mod tests {
         let effective = load_effective_config(&root.join("cfg.json"), &root.join("cfg.json.ocr"))
             .expect("checked-in cfg.json loads with preset catalog");
 
-        assert_eq!(effective.preset, "ocr_multilingual");
+        assert_eq!(effective.preset, "multilingual_mingram");
+        assert_eq!(effective.sentencepiece.vocab_size, 8192);
+        assert!(!effective.balancing.enabled);
+        assert_eq!(
+            effective.canonicalization.soft_hyphen,
+            SoftHyphenPolicy::Preserve
+        );
+        assert_eq!(effective.evaluation.test_fraction, 0.05);
         assert_eq!(effective.corpus.path, PathBuf::from("data/raw-corpus"));
-        assert_eq!(effective.output.model_prefix, "ocr_tokenizer");
+        assert_eq!(effective.output.model_prefix, "tokenizer");
         assert_eq!(effective.num_threads, 16);
         assert!(effective.sentencepiece.byte_fallback);
     }
@@ -905,6 +965,7 @@ mod tests {
     #[test]
     fn rejects_zero_threads() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: None,
             num_threads: Some(0),
             corpus: CorpusConfig {

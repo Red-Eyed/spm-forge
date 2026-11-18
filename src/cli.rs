@@ -96,6 +96,9 @@ struct TrainSummary {
     model: PathBuf,
     vocab: PathBuf,
     trainer_output: PathBuf,
+    report_md: PathBuf,
+    report_json: PathBuf,
+    split_report: PathBuf,
     work_dir: PathBuf,
     model_prefix: String,
 }
@@ -109,6 +112,9 @@ struct TrainOnlySummary {
     model: PathBuf,
     vocab: PathBuf,
     trainer_output: PathBuf,
+    report_md: PathBuf,
+    report_json: PathBuf,
+    split_report: PathBuf,
     work_dir: PathBuf,
     model_prefix: String,
 }
@@ -265,6 +271,10 @@ fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -
         return train_from_existing_corpus(&config, &progress, cancellation, json_output);
     }
 
+    ensure!(
+        !config.output.work_dir.join("reports/split.json").exists(),
+        "prepared split already exists; use --train-only with a fresh model_prefix, or choose a new work_dir"
+    );
     let corpus = discover_corpus(&config, &progress)?;
     cancellation.check()?;
     let repair = repair_corpus(&config, &corpus, &progress, cancellation)?;
@@ -277,8 +287,11 @@ fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -
     }
     cancellation.check()?;
     let balance = balance_corpus(&config, &repair, &progress)?;
+    let split = save_split(&config, &repair, &balance, cancellation)?;
     cancellation.check()?;
-    let trainer = train_sentencepiece(&config, &balance, &progress, cancellation)?;
+    let trainer =
+        crate::training_workflow::train_and_report(&config, &split, &progress, cancellation)
+            .context("could not train SentencePiece")?;
     let summary = TrainSummary::from_outputs(&config, &corpus, &repair, &balance, &trainer);
 
     if json_output {
@@ -301,6 +314,7 @@ fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -
             source_issue_suffix,
             summary.model.display()
         );
+        println!("Report: {}", summary.report_md.display());
     }
 
     Ok(())
@@ -327,6 +341,7 @@ fn train_from_existing_corpus(
             summary.balanced_lines,
             summary.model.display()
         );
+        println!("Report: {}", summary.report_md.display());
     }
 
     Ok(())
@@ -437,8 +452,47 @@ fn train_sentencepiece(
     progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<TrainerOutput> {
-    crate::training_workflow::train(config, &balance.training_files, progress, cancellation)
+    let split = crate::corpus_split::SplitManifest::load(
+        &config.output.work_dir.join("reports/split.json"),
+        &config.evaluation,
+        &preparation_hash(config)?,
+        cancellation,
+    )?;
+    ensure!(
+        split.train_paths() == balance.training_files,
+        "training file list differs from the saved split"
+    );
+    crate::training_workflow::train_and_report(config, &split, progress, cancellation)
         .context("could not train SentencePiece")
+}
+
+fn preparation_hash(config: &EffectiveConfig) -> Result<String> {
+    let bytes = serde_json::to_vec(&(
+        &config.canonicalization,
+        &config.balancing,
+        config.sentencepiece.max_sentence_length,
+    ))?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
+fn save_split(
+    config: &EffectiveConfig,
+    repair: &RepairSummary,
+    balance: &BalanceSummary,
+    cancellation: &CancellationToken,
+) -> Result<crate::corpus_split::SplitManifest> {
+    let tests: Vec<_> = repair.test_shards.iter().map(|s| s.path.clone()).collect();
+    let split = crate::corpus_split::SplitManifest::create(
+        &balance.training_files,
+        &tests,
+        config.evaluation.clone(),
+        preparation_hash(config)?,
+        repair.training_records,
+        repair.test_records,
+        cancellation,
+    )?;
+    split.save(&config.output.work_dir.join("reports/split.json"))?;
+    Ok(split)
 }
 
 impl TrainSummary {
@@ -466,6 +520,9 @@ impl TrainSummary {
             model: trainer.model.clone(),
             vocab: trainer.vocab.clone(),
             trainer_output: config.output.work_dir.join("trainer_output.json"),
+            report_md: config.output.work_dir.join("reports/tokenizer.md"),
+            report_json: config.output.work_dir.join("reports/tokenizer.json"),
+            split_report: config.output.work_dir.join("reports/split.json"),
             work_dir: config.output.work_dir.clone(),
             model_prefix: config.output.model_prefix.clone(),
         }
@@ -486,6 +543,9 @@ impl TrainOnlySummary {
             model: trainer.model.clone(),
             vocab: trainer.vocab.clone(),
             trainer_output: config.output.work_dir.join("trainer_output.json"),
+            report_md: config.output.work_dir.join("reports/tokenizer.md"),
+            report_json: config.output.work_dir.join("reports/tokenizer.json"),
+            split_report: config.output.work_dir.join("reports/split.json"),
             work_dir: config.output.work_dir.clone(),
             model_prefix: config.output.model_prefix.clone(),
         }

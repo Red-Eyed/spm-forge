@@ -59,3 +59,34 @@ the report records one actual run rather than promising bit-identical learned vo
 Natural-text effects, deployment normalization support, and downstream quality remain
 unproven. Both the original demo and normalization runner were executed after extracting
 their shared training/evaluation helpers.
+
+
+## Default profile and automatic held-out reports
+
+The default profile now selects general multilingual MinGram at 8,192 total pieces, byte
+fallback, NFC corpus preparation, and natural corpus frequencies without balancing. An
+explicit soft-hyphen preservation policy avoids inheriting OCR-specific character mappings.
+Native seed and baseline training sample at most one million training chunks by default.
+
+Canonical original records are content-hashed into a deterministic approximately 95/5 split
+before chunking. Exact canonical duplicates and all chunks of a parent remain together.
+Only the training side enters balancing, BPE seed training, MinGram, or matched-budget BPE
+training. Checksummed manifests are verified for train-only reuse. Similar records, documents,
+and common substrings are not globally deduplicated. The disabled-balancing copy now streams
+records rather than retaining entire shards.
+
+Automatic Markdown and JSON reports include actual token savings, code points/token,
+nearest-rank P50/P95 and mean tokens/record, byte fallback, unknowns, reconstruction failures,
+vocabulary usage, per-shard results, hashes, and effective settings. Evaluation uses bounded
+histograms and ID sets, merging global statistics before finalizing per-file summaries.
+Round-trip checks refer to prepared test chunks; full Unicode NFC is not embedded in the
+exported identity-normalized model.
+
+The full CLI completed with 8,192-piece models on the committed synthetic corpus augmented
+with 20,000 deterministically generated random Latin records to provide enough seed candidates.
+It evaluated 1,770 held-out records with zero unknown IDs or reconstruction failures.
+Train-only with a fresh model prefix succeeded and preserved the saved split byte-for-byte.
+The unaugmented repetitive demo cannot fill an 8K vocabulary: native BPE explicitly rejects
+the requested seed size. This is a workflow check, not natural-language compression evidence.
+The small Python-backed integration test also verifies automatic matched-size evaluation and
+Markdown generation. Natural-language quality, downstream accuracy, and latency remain unproven.

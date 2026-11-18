@@ -1,11 +1,12 @@
 # spm-ocr
 
-Train a SentencePiece tokenizer for messy multilingual OCR corpora.
+Train a multilingual SentencePiece tokenizer with MinGram compression and held-out evaluation.
 
 This project is for OCR datasets that arrive as real-world dumps: directories, single files,
 archives inside archives, compressed text, mixed scripts, weak path hints, extractor artifacts,
 and uneven source sizes. The goal is to produce a tokenizer training corpus that is repaired,
-logged, lightly balanced, and easy to inspect before training.
+logged, and easy to inspect before training. The default uses natural corpus frequencies;
+OCR-specific repair and balancing presets remain available.
 
 ## Why Use It
 
@@ -15,16 +16,18 @@ logged, lightly balanced, and easy to inspect before training.
 - Split oversized OCR lines into safe chunks, skip only unrepairable lines, and log every action.
 - Repair line chunks in parallel while writing deterministic corpus outputs.
 - Build several meaningful training corpus files instead of one anonymous bag.
-- Train SentencePiece with OCR-safe defaults from `cfg.json.ocr`.
+- Train an 8,192-piece MinGram tokenizer with byte fallback and NFC corpus preparation.
+- Evaluate a held-out split against equal-budget BPE and write Markdown and JSON reports.
 - Keep progress visible through long discovery, repair, balancing, and training stages.
 
 ## Pipeline
 
-1. Read settings from `cfg.json` and apply the selected OCR preset.
+1. Read settings from `cfg.json` and apply the selected preset.
 2. Find text from one file or a recursive directory scan, unpacking archives and compressed inputs.
 3. Fix the corpus, preserving the original files and logging every repair, chunk, or skipped line.
-4. Build several lightly balanced training corpus files under `work_dir/train_corpus/`.
-5. Train SentencePiece and write the model, vocabulary, and reports under `work_dir/`.
+4. Assign canonical records to train/test before chunking; optionally balance training data only.
+5. Train MinGram and a same-size BPE baseline on the training partition.
+6. Evaluate both on held-out text and write the model, vocabulary, and reports under `work_dir/`.
 
 ## Usage
 
@@ -32,14 +35,14 @@ Minimal `cfg.json`:
 
 ```json
 {
-  "preset": "ocr_multilingual",
+  "preset": "multilingual_mingram",
   "num_threads": 16,
   "corpus": {
     "path": "data/raw-corpus"
   },
   "output": {
-    "work_dir": "runs/ocr-spm-v1",
-    "model_prefix": "ocr_tokenizer"
+    "work_dir": "runs/mingram",
+    "model_prefix": "tokenizer"
   }
 }
 ```
@@ -77,7 +80,8 @@ RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=native" CFLAGS="${CFLAGS:-} -march=nativ
 Press Ctrl+C to stop a run. During SentencePiece training, `spm-ocr` also stops the Python
 trainer subprocess before exiting.
 
-If the corpus has already been fixed and balanced in `work_dir`, retrain only SentencePiece:
+To reuse a prepared corpus and its saved split, choose a fresh `model_prefix` in the same
+`work_dir`, then run:
 
 ```sh
 just train-only
@@ -92,14 +96,55 @@ The Python fallback vocabulary size is 8192; other fallback choices use OCR sett
 where applicable and SentencePiece 0.2.2 defaults otherwise.
 `auto_character_coverage` is not supported by the currently available 0.2.2 wheel.
 
+## Held-out evaluation
+
+Every normal training run reserves approximately 5% of original canonical records for testing.
+The fraction is approximate because assignment hashes record content: exact duplicates share a
+partition, and all chunks of a record stay together. This is independent of file order and does
+not require language labels. Similar documents and shared substrings are not deduplicated.
+
+```json
+"evaluation": { "test_fraction": 0.05, "split_seed": 42 }
+```
+
+Both settings are optional. Training fails before fitting if either partition is empty; tiny
+corpora need more distinct records or a larger test fraction. `train-only` verifies saved file
+checksums and preparation settings; it never creates a new split. Old prepared runs without a
+split must be prepared again in a fresh work directory.
+
+Open `runs/mingram/reports/tokenizer.md` after `just train`. It includes token savings versus
+BPE, code points per token, mean/P50/P95 tokens per record, byte fallback, unknown IDs,
+reconstruction failures, vocabulary usage, and test-shard regressions. Record statistics refer
+to prepared chunks, and percentiles use the nearest-rank definition. The JSON companion also
+contains effective settings, model hashes, and split provenance. A passing reconstruction check
+does not imply compression improved: inspect savings and individual shard regressions.
+
+The 8,192-piece budget includes 256 byte pieces and reserved IDs. Byte fallback preserves
+unseen characters but may need several tokens per character. At `character_coverage: 0.9995`,
+a corpus with too many required characters can exceed the budget and fail explicitly.
+A very small or repetitive corpus can also have too few distinct subwords to fill 8K;
+reduce the vocabulary budget explicitly for those runs. Pieces are capped at 16 Unicode code points during BPE seed construction, not 16 UTF-8 bytes.
+NFC is applied during corpus preparation; exported models use identity normalization, so
+round-trip claims concern prepared text. Full NFC is not automatically embedded in the model.
+
+Default balancing is disabled and preparation streams records without a corpus-wide shuffle.
+Native BPE seed and baseline training each sample at most 1,000,000 training chunks; MinGram
+replays all training chunks. The independent native samples need not be identical. Training a
+matched baseline adds one BPE training run. Explicitly enabled legacy balancing still uses its
+existing in-memory sampling path.
+
 ## Outputs
 
 - `work_dir/train_corpus/*.txt`: meaningful corpus parts used for training.
-- `work_dir/fixed_corpus.txt`: repaired audit stream.
-- `work_dir/ocr_tokenizer.model`: trained SentencePiece model.
-- `work_dir/ocr_tokenizer.vocab`: trained vocabulary.
+- `work_dir/test_corpus/*.txt`: held-out corpus, excluded from training.
+- `work_dir/fixed_corpus.txt`: repaired audit stream containing both partitions.
+- `work_dir/tokenizer.model`: trained SentencePiece model.
+- `work_dir/tokenizer.vocab`: trained vocabulary.
 - `work_dir/reports/corpus_issues.jsonl`: fixes, skips, and source issues.
-- `work_dir/reports/balance.json`: balancing summary.
+- `work_dir/reports/balance.json`: training-only balancing summary.
+- `work_dir/reports/split.json`: partition policy and corpus checksums.
+- `work_dir/reports/tokenizer.md`: held-out decision report.
+- `work_dir/reports/tokenizer.json`: structured evaluation and provenance.
 - `work_dir/trainer_request.json`: replayable trainer request.
 - `work_dir/trainer_output.json`: trainer status and artifact paths.
 

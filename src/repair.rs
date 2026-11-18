@@ -12,6 +12,7 @@ use crate::balance::{classify_line_with_hints, shard_file_name, BucketKey, Sourc
 use crate::cancel::{CancellationToken, Cancelled};
 use crate::config::EffectiveConfig;
 use crate::corpus::{CorpusSourceIssue, CorpusSourceIssueId, DiscoveredCorpus};
+use crate::corpus_split::{self, Partition};
 use crate::normalize::canonicalize_line;
 use crate::progress::{ProgressReporter, StageProgress};
 
@@ -27,6 +28,9 @@ const IO_BUFFER_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RepairSummary {
+    pub training_records: u64,
+    pub test_records: u64,
+    pub test_shards: Vec<ShardSummary>,
     pub fixed_corpus: PathBuf,
     pub issue_log: PathBuf,
     pub files_read: usize,
@@ -179,6 +183,7 @@ fn status_file_label(path: &Path) -> String {
 }
 
 struct RepairPaths {
+    test_dir: PathBuf,
     fixed_corpus: PathBuf,
     issue_log: PathBuf,
     effective_config: PathBuf,
@@ -193,6 +198,7 @@ impl RepairPaths {
         let shard_dir = config.output.work_dir.join("shards");
 
         Self {
+            test_dir: config.output.work_dir.join("test_corpus"),
             fixed_corpus,
             issue_log,
             effective_config,
@@ -201,6 +207,10 @@ impl RepairPaths {
     }
 
     fn create_dirs(&self) -> Result<(), RepairError> {
+        fs::create_dir_all(&self.test_dir).map_err(|source| RepairError::CreateDir {
+            path: self.test_dir.clone(),
+            source,
+        })?;
         create_parent_dir(&self.fixed_corpus)?;
         create_parent_dir(&self.issue_log)?;
         create_parent_dir(&self.effective_config)?;
@@ -212,6 +222,8 @@ impl RepairPaths {
 }
 
 struct RepairWriter<'a> {
+    test_dir: PathBuf,
+    test_writers: HashMap<BucketKey, BufWriter<File>>,
     output: BufWriter<File>,
     issues: BufWriter<File>,
     config: &'a EffectiveConfig,
@@ -227,6 +239,7 @@ struct RawLine {
 }
 
 struct ProcessedLine {
+    partition: Partition,
     issues: Vec<CorpusIssue>,
     output_lines: Vec<String>,
 }
@@ -240,11 +253,16 @@ impl<'a> RepairWriter<'a> {
         paths: &RepairPaths,
     ) -> Self {
         Self {
+            test_dir: paths.test_dir.clone(),
+            test_writers: HashMap::new(),
             output,
             issues,
             config,
             corpus_root,
             summary: RepairSummary {
+                training_records: 0,
+                test_records: 0,
+                test_shards: Vec::new(),
                 fixed_corpus: paths.fixed_corpus.clone(),
                 issue_log: paths.issue_log.clone(),
                 files_read: 0,
@@ -380,13 +398,24 @@ impl<'a> RepairWriter<'a> {
             self.write_issue(issue)?;
         }
 
+        if !line.output_lines.is_empty() {
+            match line.partition {
+                Partition::Train => self.summary.training_records += 1,
+                Partition::Test => self.summary.test_records += 1,
+            }
+        }
         for chunk in line.output_lines {
-            self.write_line(source_hints, &chunk)?;
+            self.write_line(source_hints, &chunk, line.partition)?;
         }
         Ok(())
     }
 
-    fn write_line(&mut self, source_hints: &SourceHints, line: &str) -> Result<(), RepairError> {
+    fn write_line(
+        &mut self,
+        source_hints: &SourceHints,
+        line: &str,
+        partition: Partition,
+    ) -> Result<(), RepairError> {
         self.output
             .write_all(line.as_bytes())
             .and_then(|_| self.output.write_all(b"\n"))
@@ -395,41 +424,49 @@ impl<'a> RepairWriter<'a> {
                 source,
             })?;
         self.summary.lines_written += 1;
-        self.write_shard_line(source_hints, line)
+        self.write_shard_line(source_hints, line, partition)
     }
 
     fn write_shard_line(
         &mut self,
         source_hints: &SourceHints,
         line: &str,
+        partition: Partition,
     ) -> Result<(), RepairError> {
         let bucket = classify_line_with_hints(source_hints, line);
-        let shard_path = self.shard_dir.join(shard_file_name(&bucket));
-        if !self.shard_writers.contains_key(&bucket) {
+        let (writers, shards, dir) = match partition {
+            Partition::Train => (
+                &mut self.shard_writers,
+                &mut self.summary.shards,
+                &self.shard_dir,
+            ),
+            Partition::Test => (
+                &mut self.test_writers,
+                &mut self.summary.test_shards,
+                &self.test_dir,
+            ),
+        };
+        let shard_path = dir.join(shard_file_name(&bucket));
+        if !writers.contains_key(&bucket) {
             let writer = open_writer(&shard_path)?;
-            self.shard_writers.insert(bucket.clone(), writer);
-            self.summary.shards.push(ShardSummary {
+            writers.insert(bucket.clone(), writer);
+            shards.push(ShardSummary {
                 bucket: bucket.clone(),
                 path: shard_path,
                 lines: 0,
             });
         }
 
-        let writer = self
-            .shard_writers
-            .get_mut(&bucket)
-            .expect("shard writer was inserted");
+        let writer = writers.get_mut(&bucket).expect("shard writer was inserted");
         writer
             .write_all(line.as_bytes())
             .and_then(|_| writer.write_all(b"\n"))
             .map_err(|source| RepairError::Write {
-                path: self.shard_dir.join(shard_file_name(&bucket)),
+                path: dir.join(shard_file_name(&bucket)),
                 source,
             })?;
 
-        let shard = self
-            .summary
-            .shards
+        let shard = shards
             .iter_mut()
             .find(|shard| shard.bucket == bucket)
             .expect("shard summary was inserted");
@@ -451,6 +488,15 @@ impl<'a> RepairWriter<'a> {
     }
 
     fn finish(mut self) -> Result<RepairSummary, RepairError> {
+        for (bucket, mut writer) in self.test_writers {
+            writer.flush().map_err(|source| RepairError::Write {
+                path: self.test_dir.join(shard_file_name(&bucket)),
+                source,
+            })?;
+        }
+        self.summary
+            .test_shards
+            .sort_by(|a, b| a.bucket.cmp(&b.bucket));
         self.output.flush().map_err(|source| RepairError::Write {
             path: self.summary.fixed_corpus.clone(),
             source,
@@ -503,6 +549,7 @@ fn process_raw_line(config: &EffectiveConfig, path: &Path, raw: RawLine) -> Proc
         Ok(text) => text,
         Err(error) => {
             return ProcessedLine {
+                partition: Partition::Train,
                 issues: vec![issue(
                     path,
                     raw.line_number,
@@ -523,6 +570,7 @@ fn process_raw_line(config: &EffectiveConfig, path: &Path, raw: RawLine) -> Proc
             != canonicalized.text
     {
         return ProcessedLine {
+            partition: Partition::Train,
             issues: vec![issue(
                 path,
                 raw.line_number,
@@ -546,10 +594,12 @@ fn process_raw_line(config: &EffectiveConfig, path: &Path, raw: RawLine) -> Proc
         ));
     }
 
+    let partition = corpus_split::assign(&canonicalized.text, &config.evaluation);
     let canonicalized_len = canonicalized.text.len();
     let max_sentence_length = config.sentencepiece.max_sentence_length as usize;
     let Some(chunks) = chunk_owned_line(canonicalized.text, max_sentence_length) else {
         return ProcessedLine {
+            partition: Partition::Train,
             issues: vec![issue(
                 path,
                 raw.line_number,
@@ -582,6 +632,7 @@ fn process_raw_line(config: &EffectiveConfig, path: &Path, raw: RawLine) -> Proc
     }
 
     ProcessedLine {
+        partition,
         issues,
         output_lines: chunks,
     }
@@ -764,6 +815,7 @@ mod tests {
 
     fn config(work_dir: &Path, corpus_path: &Path) -> EffectiveConfig {
         EffectiveConfig {
+            evaluation: crate::config::EvaluationConfig::default(),
             preset: "ocr_multilingual".to_owned(),
             num_threads: 16,
             corpus: CorpusConfig {
@@ -831,6 +883,60 @@ mod tests {
                 include_line_text_in_log: false,
                 round_trip_sample_per_bucket: 1000,
             },
+        }
+    }
+
+    #[test]
+    fn canonical_duplicates_and_all_parent_chunks_share_the_test_partition() {
+        let temp = TempDir::new().unwrap();
+        let input = temp.path().join("raw.txt");
+        let mut config = config(&temp.path().join("run"), &input);
+        config.evaluation.test_fraction = 0.5;
+        config.sentencepiece.max_sentence_length = 12;
+        let heldout = (0..1000)
+            .map(|n| format!("café {n} many repeated words"))
+            .find(|text| crate::corpus_split::assign(text, &config.evaluation) == Partition::Test)
+            .unwrap();
+        let train = (0..1000)
+            .map(|n| format!("training {n}"))
+            .find(|text| crate::corpus_split::assign(text, &config.evaluation) == Partition::Train)
+            .unwrap();
+        let decomposed = heldout.replace('é', "e\u{0301}");
+        fs::write(&input, format!("{heldout}\n{decomposed}\n{train}\n")).unwrap();
+        let corpus = DiscoveredCorpus {
+            root: input.clone(),
+            files: vec![input],
+            issues: vec![],
+        };
+        let summary = repair_corpus(
+            &config,
+            &corpus,
+            &ProgressReporter::silent(),
+            &CancellationToken::default(),
+        )
+        .unwrap();
+        assert_eq!(summary.training_records, 1);
+        assert_eq!(summary.test_records, 2);
+        let training: String = summary
+            .shards
+            .iter()
+            .map(|s| fs::read_to_string(&s.path).unwrap())
+            .collect();
+        assert_eq!(training, format!("{train}\n"));
+        let chunks: Vec<_> = summary
+            .test_shards
+            .iter()
+            .flat_map(|s| {
+                fs::read_to_string(&s.path)
+                    .unwrap()
+                    .lines()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert!(chunks.len() > 2);
+        for chunk in &chunks {
+            assert_eq!(chunks.iter().filter(|c| *c == chunk).count() % 2, 0);
         }
     }
 

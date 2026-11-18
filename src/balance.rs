@@ -140,8 +140,8 @@ pub fn balance_corpus(
         write_report(
             training_files,
             paths.report.clone(),
-            repair.lines_written,
-            repair.lines_written,
+            repair.shards.iter().map(|s| s.lines).sum(),
+            repair.shards.iter().map(|s| s.lines).sum(),
             buckets,
         )?
     };
@@ -177,7 +177,7 @@ fn assemble_balanced(
         });
     }
 
-    let input_lines = repair.lines_written;
+    let input_lines = repair.shards.iter().map(|s| s.lines).sum();
     let output_lines = buckets.iter().map(|bucket| bucket.output_lines).sum();
     let training_files = collect_training_files(&buckets);
     write_report(
@@ -196,22 +196,77 @@ fn copy_shards_to_training_parts(
 ) -> Result<Vec<BucketBalance>, BalanceError> {
     let mut buckets = Vec::new();
     for shard in &repair.shards {
-        let lines = sample_shard(shard, shard.lines, config.balancing.shuffle_seed)?;
-        let output_lines = lines.len() as u64;
-        let training_files = write_training_parts(config, paths, &shard.bucket, lines)?;
+        let training_files = copy_training_parts(config, paths, shard)?;
         buckets.push(BucketBalance {
             bucket: shard.bucket.clone(),
             input_lines: shard.lines,
             target_lines: shard.lines,
-            output_lines,
+            output_lines: shard.lines,
             training_files,
         });
     }
     Ok(buckets)
 }
 
+/// The unweighted path copies one bounded record at a time instead of materializing shards.
+fn copy_training_parts(
+    config: &EffectiveConfig,
+    paths: &BalancePaths,
+    shard: &ShardSummary,
+) -> Result<Vec<PathBuf>, BalanceError> {
+    let input = File::open(&shard.path).map_err(|source| BalanceError::Open {
+        path: shard.path.clone(),
+        source,
+    })?;
+    let mut files = Vec::new();
+    let mut writer: Option<BufWriter<File>> = None;
+    let limit = config.balancing.max_part_lines.max(1);
+    for (index, line) in BufReader::with_capacity(IO_BUFFER_BYTES, input)
+        .lines()
+        .enumerate()
+    {
+        let line = line.map_err(|source| BalanceError::Read {
+            path: shard.path.clone(),
+            source,
+        })?;
+        if (index as u64).is_multiple_of(limit) {
+            if let Some(mut previous) = writer.take() {
+                previous.flush().map_err(|source| BalanceError::Write {
+                    path: files.last().cloned().expect("writer has a path"),
+                    source,
+                })?;
+            }
+            let path = paths.train_corpus_dir.join(format!(
+                "{}.txt",
+                bucket_stem(&shard.bucket, NameFlavor::TrainingPart, files.len())
+            ));
+            let file = File::create(&path).map_err(|source| BalanceError::Write {
+                path: path.clone(),
+                source,
+            })?;
+            writer = Some(BufWriter::with_capacity(IO_BUFFER_BYTES, file));
+            files.push(path);
+        }
+        let output = writer.as_mut().expect("first record opens a writer");
+        output
+            .write_all(line.as_bytes())
+            .and_then(|_| output.write_all(b"\n"))
+            .map_err(|source| BalanceError::Write {
+                path: files.last().cloned().expect("writer has a path"),
+                source,
+            })?;
+    }
+    if let Some(mut writer) = writer {
+        writer.flush().map_err(|source| BalanceError::Write {
+            path: files.last().cloned().expect("writer has a path"),
+            source,
+        })?;
+    }
+    Ok(files)
+}
+
 fn compute_targets(config: &EffectiveConfig, repair: &RepairSummary) -> HashMap<BucketKey, u64> {
-    let total_lines = repair.lines_written;
+    let total_lines = repair.shards.iter().map(|s| s.lines).sum::<u64>();
     if total_lines == 0 {
         return HashMap::new();
     }
@@ -627,6 +682,7 @@ mod tests {
 
     fn config(work_dir: &Path, total_lines: u64) -> EffectiveConfig {
         EffectiveConfig {
+            evaluation: crate::config::EvaluationConfig::default(),
             preset: "ocr_multilingual".to_owned(),
             num_threads: 16,
             corpus: CorpusConfig { path: "raw".into() },
@@ -696,6 +752,31 @@ mod tests {
     }
 
     #[test]
+    fn unweighted_copy_rolls_parts_and_preserves_text_order() {
+        let temp = TempDir::new().unwrap();
+        let input = temp.path().join("shard.txt");
+        let text = " a  b \n中文\nก้\n\nlast";
+        fs::write(&input, text).unwrap();
+        let mut config = config(&temp.path().join("work"), 100);
+        config.balancing.enabled = false;
+        config.balancing.max_part_lines = 2;
+        let paths = BalancePaths::from_config(&config);
+        paths.create_dirs().unwrap();
+        let shard = ShardSummary {
+            bucket: classify_line(&input, "sample"),
+            path: input,
+            lines: 5,
+        };
+        let files = copy_training_parts(&config, &paths, &shard).unwrap();
+        assert_eq!(files.len(), 3);
+        let output: String = files
+            .iter()
+            .map(|path| fs::read_to_string(path).unwrap())
+            .collect();
+        assert_eq!(output, format!("{text}\n"));
+    }
+
+    #[test]
     fn path_language_hint_wins_when_present() {
         let bucket = classify_line(Path::new("vendor/es/books/file"), "hello");
 
@@ -719,6 +800,9 @@ mod tests {
         fs::write(&latin, "a\nb\nc\nd\ne\nf\n").expect("write latin");
         fs::write(&cyrillic, "ж\n").expect("write cyrillic");
         let repair = RepairSummary {
+            training_records: 7,
+            test_records: 0,
+            test_shards: Vec::new(),
             fixed_corpus: temp.path().join("fixed_corpus.txt"),
             issue_log: temp.path().join("reports/corpus_issues.jsonl"),
             files_read: 2,

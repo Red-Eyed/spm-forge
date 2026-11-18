@@ -1,5 +1,6 @@
 //! Paired compression metrics based on actual standard-runtime token IDs.
 
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Result};
@@ -21,7 +22,7 @@ impl Ratio {
     fn of(candidate: u64, baseline: u64) -> Self {
         if baseline == 0 {
             return Self::Undefined {
-                reason: "baseline emitted no tokens",
+                reason: "denominator is zero",
             };
         }
         Self::Defined {
@@ -30,8 +31,26 @@ impl Ratio {
     }
 }
 
+impl Default for Ratio {
+    fn default() -> Self {
+        Self::Undefined {
+            reason: "no observations",
+        }
+    }
+}
+
 #[derive(Debug, Default, Serialize)]
 pub struct TokenStats {
+    pub records_with_byte_fallback: u64,
+    pub mean_tokens_per_record: Ratio,
+    pub p50_tokens_per_record: Ratio,
+    pub p95_tokens_per_record: Ratio,
+    pub codepoints_per_token: Ratio,
+    pub used_vocab_pieces: usize,
+    #[serde(skip)]
+    token_lengths: BTreeMap<usize, u64>,
+    #[serde(skip)]
+    used_ids: HashSet<u32>,
     pub tokens: u64,
     pub unknown_tokens: u64,
     pub byte_tokens: u64,
@@ -41,6 +60,7 @@ pub struct TokenStats {
 
 #[derive(Debug, Default, Serialize)]
 pub struct Counts {
+    pub text_codepoints: u64,
     pub records: u64,
     pub empty_records: u64,
     pub text_bytes: u64,
@@ -59,7 +79,13 @@ pub struct Metrics {
 }
 
 impl From<Counts> for Metrics {
-    fn from(counts: Counts) -> Self {
+    fn from(mut counts: Counts) -> Self {
+        counts
+            .baseline
+            .finalize(counts.records, counts.text_codepoints);
+        counts
+            .candidate
+            .finalize(counts.records, counts.text_codepoints);
         let token_count_ratio = Ratio::of(counts.candidate.tokens, counts.baseline.tokens);
         let percent_tokens_saved = match token_count_ratio {
             Ratio::Defined { value } => Ratio::Defined {
@@ -156,6 +182,7 @@ fn compare_file(
         counts.records += 1;
         counts.empty_records += u64::from(text.is_empty());
         counts.text_bytes += text.len() as u64;
+        counts.text_codepoints += text.chars().count() as u64;
         match after.cmp(&before) {
             std::cmp::Ordering::Less => counts.improved_records += 1,
             std::cmp::Ordering::Equal => counts.unchanged_records += 1,
@@ -174,6 +201,12 @@ impl TokenStats {
         let ids: Vec<u32> = pieces.iter().map(|p| p.id).collect();
         let decoded = model.processor.decode_piece_ids(&ids)?;
         self.tokens += ids.len() as u64;
+        *self.token_lengths.entry(ids.len()).or_default() += 1;
+        self.used_ids.extend(ids.iter().copied());
+        self.records_with_byte_fallback += u64::from(
+            ids.iter()
+                .any(|id| model.proto.pieces[*id as usize].r#type() == Type::Byte),
+        );
         for id in &ids {
             match model.proto.pieces[*id as usize].r#type() {
                 Type::Unknown => self.unknown_tokens += 1,
@@ -188,16 +221,51 @@ impl TokenStats {
     }
 
     fn add(&mut self, other: &Self) {
+        self.records_with_byte_fallback += other.records_with_byte_fallback;
+        for (length, frequency) in &other.token_lengths {
+            *self.token_lengths.entry(*length).or_default() += frequency;
+        }
+        self.used_ids.extend(other.used_ids.iter().copied());
         self.tokens += other.tokens;
         self.unknown_tokens += other.unknown_tokens;
         self.byte_tokens += other.byte_tokens;
         self.raw_round_trip_failures += other.raw_round_trip_failures;
         self.normalized_round_trip_failures += other.normalized_round_trip_failures;
     }
+
+    fn finalize(&mut self, records: u64, codepoints: u64) {
+        self.mean_tokens_per_record = Ratio::of(self.tokens, records);
+        self.p50_tokens_per_record = self.quantile(records, 50);
+        self.p95_tokens_per_record = self.quantile(records, 95);
+        self.codepoints_per_token = Ratio::of(codepoints, self.tokens);
+        self.used_vocab_pieces = self.used_ids.len();
+        // File reports retain scalar summaries, not one histogram/set per corpus file.
+        self.token_lengths.clear();
+        self.used_ids.clear();
+        self.used_ids.shrink_to_fit();
+    }
+
+    fn quantile(&self, records: u64, percent: u128) -> Ratio {
+        if records == 0 {
+            return Ratio::default();
+        }
+        let rank = (u128::from(records) * percent).div_ceil(100);
+        let mut seen = 0_u128;
+        for (length, frequency) in &self.token_lengths {
+            seen += u128::from(*frequency);
+            if seen >= rank {
+                return Ratio::Defined {
+                    value: *length as f64,
+                };
+            }
+        }
+        Ratio::default()
+    }
 }
 
 impl Counts {
     fn add(&mut self, other: &Self) {
+        self.text_codepoints += other.text_codepoints;
         self.records += other.records;
         self.empty_records += other.empty_records;
         self.text_bytes += other.text_bytes;
@@ -206,5 +274,59 @@ impl Counts {
         self.worsened_records += other.worsened_records;
         self.baseline.add(&other.baseline);
         self.candidate.add(&other.candidate);
+    }
+}
+
+#[cfg(test)]
+mod metric_tests {
+    use super::*;
+
+    #[test]
+    fn aggregate_quantiles_and_utilization_use_all_observations() {
+        let mut first = Counts {
+            records: 3,
+            text_codepoints: 30,
+            ..Counts::default()
+        };
+        first.candidate.tokens = 13;
+        first.candidate.token_lengths.extend([(1, 2), (11, 1)]);
+        first.candidate.used_ids.extend([0, 1]);
+        let mut second = Counts {
+            records: 2,
+            text_codepoints: 10,
+            ..Counts::default()
+        };
+        second.candidate.tokens = 4;
+        second.candidate.token_lengths.insert(2, 2);
+        second.candidate.used_ids.extend([1, 2]);
+        let mut total = Counts::default();
+        total.add(&first);
+        total.add(&second);
+        let metrics = Metrics::from(total);
+        let stats = metrics.counts.candidate;
+        assert_eq!(stats.mean_tokens_per_record, Ratio::Defined { value: 3.4 });
+        assert_eq!(stats.p50_tokens_per_record, Ratio::Defined { value: 2.0 });
+        assert_eq!(stats.p95_tokens_per_record, Ratio::Defined { value: 11.0 });
+        assert_eq!(
+            stats.codepoints_per_token,
+            Ratio::Defined { value: 40.0 / 17.0 }
+        );
+        assert_eq!(stats.used_vocab_pieces, 3);
+        assert!(stats.token_lengths.is_empty());
+        assert!(stats.used_ids.is_empty());
+    }
+
+    #[test]
+    fn empty_evaluation_has_undefined_compression_and_quantiles() {
+        let metrics = Metrics::from(Counts::default());
+        assert!(matches!(metrics.token_count_ratio, Ratio::Undefined { .. }));
+        assert!(matches!(
+            metrics.counts.candidate.p95_tokens_per_record,
+            Ratio::Undefined { .. }
+        ));
+        assert!(matches!(
+            metrics.counts.candidate.codepoints_per_token,
+            Ratio::Undefined { .. }
+        ));
     }
 }
