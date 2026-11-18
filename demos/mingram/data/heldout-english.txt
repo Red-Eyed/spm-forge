@@ -1,0 +1,400 @@
+the student reads the answer in the morning 21
+the friend reads the language at home 94
+the friend understands the language at school 78
+the student reviews the text at home 11
+the writer understands the text in the morning 78
+the writer reviews the story at school 37
+the teacher reviews the lesson in the morning 62
+the teacher reviews the language at school 76
+the teacher reviews the answer in the morning 38
+the friend writes the text at school 90
+the teacher reads the question at home 17
+the student reviews the lesson in the morning 24
+the writer reviews the language today 64
+the teacher reads the message in the morning 72
+the teacher writes the answer at school 24
+the teacher reviews the message at home 94
+the student understands the language at home 49
+the teacher reviews the text today 54
+the friend reads the story in the morning 71
+the student understands the story at home 16
+the friend reviews the book at home 52
+the friend writes the message at home 27
+the student writes the question at school 92
+the friend understands the lesson at school 51
+the writer writes the text at school 7
+the friend reviews the message today 77
+the writer writes the language at school 87
+the friend reviews the text at home 44
+the teacher writes the question at school 18
+the student writes the lesson in the morning 73
+the writer writes the message today 42
+the writer understands the answer today 23
+the teacher reviews the message at school 15
+the teacher reviews the question today 32
+the student reviews the question in the morning 8
+the writer understands the lesson today 27
+the teacher understands the lesson at home 99
+the friend reviews the question in the morning 78
+the writer writes the answer at home 24
+the writer reads the question at school 53
+the writer reads the language today 27
+the teacher understands the story in the morning 39
+the friend reads the message at school 7
+the teacher understands the message today 53
+the friend reads the text in the morning 0
+the friend reviews the question today 64
+the teacher reviews the text at home 71
+the student reads the question in the morning 50
+the student reads the language in the morning 46
+the student reviews the language in the morning 78
+the student writes the answer at home 12
+the writer reads the message at home 66
+the friend understands the answer at home 21
+the friend reads the text at home 32
+the writer reviews the story in the morning 95
+the teacher understands the story at school 52
+the writer understands the story today 19
+the student understands the question in the morning 14
+the teacher reviews the text at school 4
+the friend reviews the story at school 94
+the student reviews the question at home 49
+the writer understands the text today 55
+the student writes the language at school 24
+the teacher writes the lesson in the morning 72
+the student reviews the message at school 72
+the writer understands the language at home 69
+the teacher reads the text at school 82
+the friend writes the message at home 31
+the friend reviews the book in the morning 57
+the friend reads the book today 18
+the writer writes the language at home 3
+the writer reviews the question today 47
+the student reviews the text today 5
+the friend reads the question in the morning 79
+the teacher reviews the message at home 90
+the student reviews the story at school 72
+the student reads the message today 67
+the teacher reads the message at school 74
+the writer reviews the story at home 48
+the writer understands the story at school 58
+the teacher writes the question at school 55
+the writer reviews the answer in the morning 87
+the writer reviews the question at school 85
+the friend reviews the story in the morning 37
+the student reviews the lesson in the morning 79
+the friend reads the answer at school 60
+the student reads the book at home 73
+the student understands the message today 5
+the friend reviews the text at home 37
+the writer understands the text in the morning 64
+the student reads the message in the morning 69
+the teacher reads the question in the morning 20
+the teacher reads the answer at school 61
+the writer reviews the answer at home 38
+the teacher reviews the lesson at school 22
+the friend reads the lesson at school 60
+the friend writes the language in the morning 65
+the teacher reads the question today 9
+the friend reads the question at school 82
+the teacher reviews the story at school 8
+the student writes the lesson in the morning 7
+the writer understands the question today 5
+the friend reads the message in the morning 59
+the friend reads the text in the morning 12
+the friend reads the language at school 32
+the student reads the language today 62
+the teacher reviews the answer today 97
+the friend understands the book at home 79
+the teacher reads the book in the morning 5
+the student understands the story in the morning 90
+the student reads the question at home 73
+the writer understands the language in the morning 72
+the writer writes the message today 34
+the writer understands the answer at home 45
+the teacher writes the message in the morning 69
+the writer understands the question in the morning 20
+the student reads the lesson at home 31
+the teacher reads the story at home 41
+the writer understands the story today 44
+the student reads the question at home 77
+the student writes the question today 6
+the friend reviews the answer at school 44
+the teacher reviews the language at home 73
+the writer writes the story in the morning 17
+the student writes the story today 19
+the friend understands the lesson at home 44
+the teacher reads the language in the morning 13
+the writer reads the book at home 67
+the teacher understands the story in the morning 66
+the writer writes the lesson in the morning 18
+the writer reviews the message at home 21
+the teacher writes the language at school 86
+the teacher reviews the book at school 31
+the writer reads the story in the morning 51
+the writer reviews the language in the morning 31
+the writer reads the answer at school 51
+the friend writes the story today 7
+the student writes the lesson today 14
+the teacher understands the story at school 37
+the student reviews the lesson in the morning 74
+the teacher reviews the message today 61
+the student reads the answer at home 25
+the student reads the story today 91
+the teacher writes the message at home 66
+the teacher reads the message in the morning 92
+the teacher reviews the question in the morning 64
+the student writes the language in the morning 40
+the writer writes the lesson today 44
+the writer reads the text in the morning 88
+the teacher reviews the question in the morning 78
+the friend writes the story today 77
+the teacher reads the book in the morning 25
+the teacher reads the question at school 86
+the student understands the message at home 67
+the writer writes the answer at school 44
+the student reviews the story in the morning 87
+the teacher reviews the language in the morning 80
+the writer understands the story at home 59
+the teacher understands the question at school 18
+the student reviews the lesson today 25
+the teacher reviews the answer at home 66
+the friend reads the answer today 1
+the friend reads the text at school 92
+the teacher reviews the message in the morning 33
+the student reads the answer today 77
+the friend reviews the story at school 87
+the student reads the lesson in the morning 33
+the writer writes the answer today 10
+the friend reviews the story at home 2
+the teacher writes the text at school 28
+the writer understands the story in the morning 44
+the student reads the lesson today 45
+the writer understands the answer at school 21
+the teacher reads the book today 83
+the writer writes the language today 32
+the friend writes the lesson at home 26
+the student understands the story at home 13
+the friend understands the lesson in the morning 36
+the student reviews the text at home 32
+the writer writes the lesson at school 8
+the writer understands the text in the morning 29
+the friend writes the answer at school 81
+the student reads the story at home 25
+the writer writes the question at school 27
+the student writes the message at home 89
+the teacher reviews the message today 93
+the friend writes the answer today 55
+the student reviews the language at home 32
+the teacher understands the story in the morning 83
+the friend understands the text in the morning 60
+the friend reviews the lesson in the morning 60
+the writer writes the message at home 53
+the student reads the answer at school 78
+the student writes the answer today 80
+the writer understands the language at home 54
+the student understands the story today 7
+the friend understands the book today 29
+the writer writes the lesson in the morning 61
+the writer reads the story today 51
+the writer reviews the book in the morning 39
+the student writes the text in the morning 48
+the writer reviews the text in the morning 21
+the writer writes the book at home 37
+the writer reviews the message at home 18
+the student understands the answer in the morning 93
+the teacher reviews the language in the morning 6
+the friend understands the question in the morning 94
+the student understands the book at school 95
+the student reviews the lesson at home 78
+the student writes the story at home 95
+the teacher writes the language today 39
+the student reviews the text in the morning 81
+the student writes the language in the morning 70
+the writer understands the book in the morning 73
+the teacher writes the text at home 84
+the friend writes the language in the morning 78
+the friend writes the story in the morning 94
+the writer writes the question in the morning 6
+the writer writes the book today 20
+the teacher reviews the story at school 46
+the friend reads the message at home 46
+the friend writes the book at school 25
+the student reads the story in the morning 69
+the student reviews the question in the morning 99
+the student writes the text in the morning 11
+the teacher understands the book at school 61
+the teacher understands the lesson today 49
+the student writes the story at home 93
+the teacher reads the answer at home 74
+the student understands the book at school 46
+the writer understands the message in the morning 20
+the student understands the text today 52
+the teacher writes the language in the morning 47
+the friend reads the message in the morning 42
+the teacher reviews the answer at school 24
+the writer reviews the book today 91
+the writer writes the message at school 19
+the friend reads the question today 44
+the teacher reviews the answer today 10
+the student writes the story in the morning 1
+the teacher reviews the question today 17
+the teacher reads the story today 43
+the writer reads the message in the morning 7
+the friend reviews the answer today 5
+the student reviews the story at school 19
+the teacher understands the answer today 31
+the writer understands the message at school 77
+the student writes the text in the morning 80
+the teacher reads the language today 82
+the writer writes the language today 58
+the teacher reads the book at home 83
+the writer reads the text at school 37
+the teacher reads the story today 80
+the student reads the message in the morning 58
+the student reviews the book at home 95
+the friend reads the story today 23
+the teacher understands the text at home 6
+the friend reviews the question in the morning 82
+the friend reviews the text today 59
+the writer understands the story at home 4
+the student writes the story today 24
+the writer reads the message in the morning 9
+the teacher reviews the text today 81
+the student reads the lesson at school 26
+the friend understands the lesson at home 64
+the teacher writes the book at home 3
+the writer reads the answer in the morning 45
+the writer writes the story today 45
+the friend reviews the question at home 49
+the writer writes the lesson in the morning 21
+the friend understands the lesson at school 44
+the friend writes the lesson today 65
+the student writes the story at school 1
+the student understands the question today 99
+the writer reads the language today 7
+the student understands the text at school 57
+the student reads the question at home 10
+the student writes the language at school 45
+the friend writes the book at home 85
+the teacher writes the message in the morning 20
+the student writes the book at school 36
+the friend understands the message today 36
+the writer reviews the text at school 54
+the student reads the text today 62
+the writer writes the lesson in the morning 93
+the friend reviews the question today 26
+the student writes the language today 9
+the writer understands the answer at school 92
+the teacher writes the story in the morning 16
+the friend writes the book in the morning 40
+the friend writes the answer in the morning 26
+the writer understands the lesson at home 33
+the writer reads the text at home 8
+the teacher reviews the book at school 78
+the writer writes the message at school 52
+the teacher reviews the question at home 32
+the student writes the question in the morning 40
+the student reviews the story in the morning 81
+the teacher writes the question at home 32
+the writer reads the question at home 51
+the teacher writes the text at home 82
+the student writes the book at home 88
+the writer understands the lesson at home 35
+the student reviews the question at home 14
+the teacher reviews the text at home 51
+the teacher reviews the lesson in the morning 9
+the teacher reviews the lesson in the morning 44
+the friend understands the book at school 30
+the friend writes the question at home 87
+the friend reads the lesson at home 84
+the student reads the message in the morning 72
+the student writes the story today 66
+the writer reviews the question in the morning 21
+the student reads the language at home 45
+the teacher reads the lesson at home 75
+the friend reads the answer at school 96
+the teacher writes the story at school 14
+the friend writes the story at home 21
+the teacher reviews the answer in the morning 2
+the writer understands the question at school 48
+the teacher understands the story today 61
+the student reads the book in the morning 64
+the writer reviews the story at school 14
+the student understands the answer at school 40
+the friend writes the book at school 34
+the friend reviews the book at school 40
+the writer reads the lesson at school 91
+the friend understands the message at school 36
+the teacher understands the book today 73
+the teacher reviews the answer in the morning 61
+the writer reviews the language at school 89
+the student reads the question in the morning 19
+the friend writes the story in the morning 98
+the friend reviews the story in the morning 34
+the writer reviews the lesson at school 35
+the teacher writes the message today 67
+the teacher understands the lesson in the morning 83
+the student reviews the language in the morning 61
+the friend reads the text in the morning 39
+the teacher reviews the message at school 38
+the writer understands the question in the morning 72
+the friend understands the book in the morning 40
+the teacher writes the lesson in the morning 97
+the student reads the message at home 88
+the student reviews the book today 46
+the teacher understands the book at home 8
+the student reviews the question at home 71
+the friend reads the story at home 51
+the student writes the question today 19
+the writer understands the lesson at home 63
+the friend reads the text at school 19
+the writer reads the story at home 80
+the writer writes the answer in the morning 91
+the friend understands the question at home 10
+the teacher writes the answer today 73
+the friend writes the answer at home 4
+the friend reviews the answer in the morning 16
+the teacher reviews the language today 46
+the friend writes the text at school 80
+the teacher reviews the message in the morning 66
+the teacher writes the text today 44
+the teacher understands the language today 74
+the writer understands the lesson in the morning 67
+the teacher understands the lesson at home 65
+the student understands the text in the morning 41
+the teacher writes the lesson in the morning 85
+the friend reads the book at home 29
+the student writes the lesson today 95
+the student reads the language today 2
+the teacher reads the question at home 63
+the teacher reads the book today 26
+the writer writes the text today 98
+the teacher understands the book today 9
+the teacher reviews the language today 38
+the friend reviews the language today 2
+the writer reads the message in the morning 73
+the writer writes the story in the morning 55
+the friend reads the story at school 87
+the writer writes the story at school 34
+the writer understands the lesson in the morning 50
+the student writes the language at home 75
+the writer reads the book in the morning 49
+the teacher reads the text at home 39
+the writer reviews the text today 48
+the student reads the book at home 57
+the student reads the story today 38
+the student reviews the text at school 64
+the friend reviews the question at home 53
+the teacher writes the book in the morning 26
+the teacher writes the text at school 34
+the writer reads the answer at home 77
+the friend reads the book at school 74
+the writer writes the story at home 43
+the writer reads the lesson at school 74
+the teacher reads the question at school 93
+the teacher reviews the question today 84
+the friend understands the question at school 34
+the writer understands the language in the morning 9
+the friend reads the language today 8
+the teacher understands the question at school 40

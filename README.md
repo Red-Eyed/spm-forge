@@ -148,6 +148,17 @@ ID count. No custom inference code is needed. See [module details](src/tokenizer
 
 ## Tokenizer evaluation
 
+For a self-contained demonstration with committed synthetic data and a generated Markdown
+decision report, run:
+
+```sh
+uv run --locked demos/mingram/run.py
+```
+
+Read the [demo decision report](demos/mingram/REPORT.md) for the measured gains, regressions,
+text provenance, and limits. The demo builds the Rust executable and trains all models;
+it requires no existing tokenizer or corpus download.
+
 Compare two standard SentencePiece models on the same held-out text:
 
 ```sh
