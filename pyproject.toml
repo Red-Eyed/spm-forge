@@ -25,4 +25,7 @@ sentencepiece = { git = "https://github.com/google/sentencepiece.git", subdirect
 [dependency-groups]
 dev = [
     "cmake>=4.4.4",
+    "pydantic-settings>=2,<3",
+    "pyrefly>=1.4.1",
+    "ruff>=0.17.5",
 ]
