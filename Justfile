@@ -1,3 +1,9 @@
+export RUSTFLAGS := ""
+export CARGO_ENCODED_RUSTFLAGS := ""
+export CFLAGS := ""
+export CXXFLAGS := ""
+export CARGO_TARGET_DIR := "target/hpc-portable"
+
 cargo-run +args:
     uv run cargo run --release -- {{args}}
 

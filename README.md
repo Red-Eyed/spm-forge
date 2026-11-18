@@ -71,20 +71,19 @@ Run:
 just train
 ```
 
-Or directly:
+To pass arguments directly to the release binary through the same build setup:
 
 ```sh
-uv run cargo run --release -- train --config cfg.json
+just cargo-run train --config cfg.json
 ```
 
-Build recipes use the toolchain's default CPU target. They do not force
-`target-cpu=native` or `-march=native`; CPU-specific builds can fail with `SIGILL`
-when build artifacts are reused on a different CPU. Explicit environment flags are still
-honored. If this occurs, clear those flags and build in a fresh target directory:
-
-```sh
-env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS -u CFLAGS -u CXXFLAGS CARGO_TARGET_DIR=target-portable just train
-```
+All `just` recipes clear `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, `CFLAGS`, and
+`CXXFLAGS`, and use a separate cache at `target/hpc-portable/`.
+This uses the toolchain's default CPU target and prevents inherited `native` flags
+from producing CPU-specific build helpers. `just check` uses the same setup.
+On HPC, run `just train` inside an allocated compute job. Login and compute nodes
+can have different CPUs; these defaults address CPU instruction compatibility,
+not differences in operating systems, shared libraries, or compiler installations.
 
 Press Ctrl+C to stop a run. During SentencePiece training, `spm-ocr` also stops the Python
 trainer subprocess before exiting.
