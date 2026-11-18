@@ -74,7 +74,16 @@ just train
 Or directly:
 
 ```sh
-RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=native" CFLAGS="${CFLAGS:-} -march=native" uv run cargo run --release -- train --config cfg.json
+uv run cargo run --release -- train --config cfg.json
+```
+
+Build recipes use the toolchain's default CPU target. They do not force
+`target-cpu=native` or `-march=native`; CPU-specific builds can fail with `SIGILL`
+when build artifacts are reused on a different CPU. Explicit environment flags are still
+honored. If this occurs, clear those flags and build in a fresh target directory:
+
+```sh
+env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS -u CFLAGS -u CXXFLAGS CARGO_TARGET_DIR=target-portable just train
 ```
 
 Press Ctrl+C to stop a run. During SentencePiece training, `spm-ocr` also stops the Python
