@@ -754,8 +754,8 @@ mod tests {
 
     use crate::config::{
         BalanceAxis, BalancingConfig, BalancingMode, CanonicalizationConfig, CorpusConfig,
-        EffectiveConfig, LinePolicy, ModelType, NormalizationRuleName, OutputConfig,
-        PythonTrainerConfig, SentencePieceConfig, SoftHyphenPolicy, StripRule, TrainerKind,
+        EffectiveConfig, LinePolicy, NormalizationRuleName, OutputConfig, PythonTrainerConfig,
+        SentencePieceConfig, SoftHyphenPolicy, StripRule, TrainerKind, TrainingAlgorithm,
         UnicodeForm, ValidationConfig, ValidationMode,
     };
     use crate::corpus::{CorpusSourceIssue, CorpusSourceIssueId};
@@ -807,7 +807,7 @@ mod tests {
                     args: vec!["run".to_owned(), "python".to_owned()],
                     module: "spm_ocr_train_bridge".to_owned(),
                 },
-                model_type: ModelType::Bpe,
+                algorithm: TrainingAlgorithm::Bpe,
                 vocab_size: 40_000,
                 character_coverage: 0.9998,
                 byte_fallback: true,

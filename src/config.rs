@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -209,11 +210,11 @@ pub enum BalanceAxis {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct SentencePieceConfig {
     pub trainer: TrainerKind,
     pub python: PythonTrainerConfig,
-    pub model_type: ModelType,
+    #[serde(flatten)]
+    pub algorithm: TrainingAlgorithm,
     pub vocab_size: u32,
     pub character_coverage: f64,
     pub byte_fallback: bool,
@@ -240,6 +241,8 @@ pub struct PartialSentencePieceConfig {
     pub python: Option<PythonTrainerConfig>,
     #[serde(default)]
     pub model_type: Option<ModelType>,
+    #[serde(default)]
+    pub mingram: Option<MingramConfig>,
     #[serde(default)]
     pub vocab_size: Option<u32>,
     #[serde(default)]
@@ -290,6 +293,33 @@ pub struct PythonTrainerConfig {
 #[serde(rename_all = "snake_case")]
 pub enum ModelType {
     Bpe,
+    Mingram,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "model_type", rename_all = "snake_case")]
+pub enum TrainingAlgorithm {
+    Bpe,
+    Mingram { mingram: MingramConfig },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MingramConfig {
+    #[serde(default = "default_mingram_iterations")]
+    pub iterations: NonZeroUsize,
+}
+
+fn default_mingram_iterations() -> NonZeroUsize {
+    NonZeroUsize::new(2).expect("default iteration count is positive")
+}
+
+impl Default for MingramConfig {
+    fn default() -> Self {
+        Self {
+            iterations: default_mingram_iterations(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -535,6 +565,7 @@ impl PartialSentencePieceConfig {
         replace_if_some(&mut self.trainer, other.trainer);
         replace_if_some(&mut self.python, other.python.clone());
         replace_if_some(&mut self.model_type, other.model_type);
+        replace_if_some(&mut self.mingram, other.mingram);
         replace_if_some(&mut self.vocab_size, other.vocab_size);
         replace_if_some(&mut self.character_coverage, other.character_coverage);
         replace_if_some(&mut self.byte_fallback, other.byte_fallback);
@@ -574,10 +605,24 @@ impl PartialSentencePieceConfig {
     }
 
     fn require(self) -> Result<SentencePieceConfig, ConfigError> {
+        let algorithm = match require_field(self.model_type, "sentencepiece.model_type")? {
+            ModelType::Bpe => {
+                if self.mingram.is_some() {
+                    return Err(ConfigError::InvalidPresetField {
+                        field: "sentencepiece.mingram",
+                        reason: "MinGram options require model_type mingram",
+                    });
+                }
+                TrainingAlgorithm::Bpe
+            }
+            ModelType::Mingram => TrainingAlgorithm::Mingram {
+                mingram: self.mingram.unwrap_or_default(),
+            },
+        };
         Ok(SentencePieceConfig {
             trainer: require_field(self.trainer, "sentencepiece.trainer")?,
             python: require_field(self.python, "sentencepiece.python")?,
-            model_type: require_field(self.model_type, "sentencepiece.model_type")?,
+            algorithm,
             vocab_size: require_field(self.vocab_size, "sentencepiece.vocab_size")?,
             character_coverage: require_field(
                 self.character_coverage,
@@ -695,6 +740,73 @@ mod tests {
     }
 
     #[test]
+    fn mingram_selection_defaults_and_options_are_typed() {
+        let mut config = catalog()
+            .presets
+            .remove("ocr_multilingual")
+            .unwrap()
+            .sentencepiece;
+        config.model_type = Some(ModelType::Mingram);
+        let effective = config.clone().require().unwrap();
+        assert_eq!(
+            effective.algorithm,
+            TrainingAlgorithm::Mingram {
+                mingram: MingramConfig::default()
+            }
+        );
+        config.mingram = Some(MingramConfig {
+            iterations: NonZeroUsize::new(3).unwrap(),
+        });
+        let effective = config.require().unwrap();
+        let json = serde_json::to_value(&effective).unwrap();
+        assert_eq!(json["model_type"], "mingram");
+        assert_eq!(json["mingram"]["iterations"], 3);
+    }
+
+    #[test]
+    fn mingram_options_are_rejected_for_bpe() {
+        let mut config = catalog()
+            .presets
+            .remove("ocr_multilingual")
+            .unwrap()
+            .sentencepiece;
+        config.mingram = Some(MingramConfig::default());
+        assert!(matches!(
+            config.require(),
+            Err(ConfigError::InvalidPresetField {
+                field: "sentencepiece.mingram",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn zero_iterations_and_unknown_options_are_rejected_at_boundary() {
+        for json in [
+            r#"{"model_type":"mingram","mingram":{"iterations":0}}"#,
+            r#"{"model_type":"mingram","mingram":{"typo":2}}"#,
+        ] {
+            assert!(serde_json::from_str::<PartialSentencePieceConfig>(json).is_err());
+        }
+    }
+
+    #[test]
+    fn shipped_mingram_example_loads() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let config =
+            load_effective_config(&root.join("cfg.mingram.json"), &root.join("cfg.json.ocr"))
+                .unwrap();
+        assert_eq!(
+            config.sentencepiece.algorithm,
+            TrainingAlgorithm::Mingram {
+                mingram: MingramConfig::default()
+            }
+        );
+        assert_eq!(config.sentencepiece.vocab_size, 8192);
+        assert!(!config.balancing.enabled);
+    }
+
+    #[test]
     fn expands_default_preset() {
         let raw = RawConfig {
             preset: None,
@@ -716,7 +828,7 @@ mod tests {
 
         assert_eq!(effective.preset, "ocr_multilingual");
         assert_eq!(effective.num_threads, 16);
-        assert_eq!(effective.sentencepiece.model_type, ModelType::Bpe);
+        assert_eq!(effective.sentencepiece.algorithm, TrainingAlgorithm::Bpe);
         assert!(effective.sentencepiece.byte_fallback);
         assert_eq!(effective.validation.line_policy, LinePolicy::FixOrSkip);
     }

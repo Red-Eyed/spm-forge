@@ -8,6 +8,7 @@ mod progress;
 mod repair;
 mod tokenizer;
 mod trainer;
+mod training_workflow;
 
 use std::process::ExitCode;
 

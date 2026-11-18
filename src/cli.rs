@@ -192,6 +192,7 @@ fn prepare_mingram_seed(
         .context("seed vocabulary size overflow")?
         .div_ceil(100);
     config.sentencepiece.vocab_size = u32::try_from(size)?;
+    config.sentencepiece.algorithm = config::TrainingAlgorithm::Bpe;
     config.output.work_dir = args.output.with_extension("seed");
     config.output.model_prefix = "seed".to_owned();
     let progress = if args.quiet {
@@ -436,7 +437,7 @@ fn train_sentencepiece(
     progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<TrainerOutput> {
-    trainer::train_sentencepiece(config, &balance.training_files, progress, cancellation)
+    crate::training_workflow::train(config, &balance.training_files, progress, cancellation)
         .context("could not train SentencePiece")
 }
 

@@ -105,6 +105,30 @@ where applicable and SentencePiece 0.2.2 defaults otherwise.
 
 ## MinGram training
 
+Select MinGram in the normal training configuration:
+
+```json
+"sentencepiece": {
+  "model_type": "mingram",
+  "vocab_size": 8192,
+  "mingram": { "iterations": 2 }
+}
+```
+
+The `mingram` options object is optional; two iterations are the default. See the complete
+[cfg.mingram.json](cfg.mingram.json) example, which disables optional corpus balancing.
+
+```sh
+just train cfg.mingram.json
+just train-only cfg.mingram.json
+```
+
+Both commands select Rust MinGram after the existing corpus-preparation stage. The configured
+Python trainer generates the BPE seed only; Rust performs optimization and export. Final files
+use the configured `output.work_dir` and `output.model_prefix`. The seed lives in a separate
+`<model_prefix>.seed/` directory. Existing MinGram outputs are not overwritten; use a new
+prefix or work directory for another run. BPE remains the default for existing configurations.
+
 Reduce an existing BPE or Unigram candidate vocabulary using Rust MinGram training:
 
 ```sh

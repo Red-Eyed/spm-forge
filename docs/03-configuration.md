@@ -1,5 +1,26 @@
 # Recommended configuration
 
+## MinGram in cfg.json
+
+Set `sentencepiece.model_type` to `"mingram"` to use the Rust optimizer through the normal
+`just train` or `just train-only` workflow. `sentencepiece.vocab_size` is the final vocabulary
+budget, including protected characters and reserved pieces. Optional
+`sentencepiece.mingram.iterations` is a positive integer, defaulting to 2.
+
+See [cfg.mingram.json](../cfg.mingram.json) for a complete example. The configured Python
+runner is used only to generate a BPE seed at `ceil(1.15 * final_vocab_size)`. All other
+SentencePiece options apply to seed training, and its normalization and coverage are retained
+in the final model. No language weights are introduced. Corpus repair and any explicitly
+enabled balancing still belong to the existing preparation pipeline.
+
+The final model, vocabulary, MinGram report/ID mapping, and `trainer_output.json` are written
+under the configured work directory. BPE seed requests and outputs are retained under
+`<model_prefix>.seed/`. The top-level MinGram `trainer_request.json` records optimizer inputs;
+it is not a request for direct replay by the Python bridge. Existing model artifacts are not
+overwritten. MinGram-specific options with `model_type: "bpe"` are rejected.
+
+## Existing BPE preset
+
 ```python
 import sentencepiece as spm
 

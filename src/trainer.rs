@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::cancel::{CancellationToken, Cancelled};
-use crate::config::{EffectiveConfig, SentencePieceConfig};
+use crate::config::{EffectiveConfig, SentencePieceConfig, TrainingAlgorithm};
 use crate::progress::ProgressReporter;
 
 const TRAINER_REQUEST_NAME: &str = "trainer_request.json";
@@ -71,6 +71,8 @@ pub enum TrainerStatus {
 
 #[derive(Debug, Error)]
 pub enum TrainerError {
+    #[error("the Python trainer accepts BPE only; use the training workflow for MinGram")]
+    UnsupportedAlgorithm,
     #[error("failed to create directory {path}: {source}")]
     CreateDir {
         path: PathBuf,
@@ -108,6 +110,9 @@ pub fn train_sentencepiece(
     progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<TrainerOutput, TrainerError> {
+    if !matches!(config.sentencepiece.algorithm, TrainingAlgorithm::Bpe) {
+        return Err(TrainerError::UnsupportedAlgorithm);
+    }
     let paths = TrainerPaths::from_config(config);
     paths.create_dirs()?;
 
@@ -401,11 +406,11 @@ fn with_extension(path: &Path, extension: &str) -> PathBuf {
 }
 
 fn model_type(config: &SentencePieceConfig) -> String {
-    serde_json::to_value(config.model_type)
-        .expect("model type is serializable")
-        .as_str()
-        .expect("model type serializes as a string")
-        .to_owned()
+    match config.algorithm {
+        TrainingAlgorithm::Bpe => "bpe",
+        TrainingAlgorithm::Mingram { .. } => "mingram",
+    }
+    .to_owned()
 }
 
 fn normalization_rule_name(config: &SentencePieceConfig) -> String {
@@ -417,19 +422,19 @@ fn normalization_rule_name(config: &SentencePieceConfig) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::path::Path;
 
     use crate::config::{
         BalanceAxis, BalancingConfig, BalancingMode, CanonicalizationConfig, CorpusConfig,
-        EffectiveConfig, LinePolicy, ModelType, NormalizationRuleName, OutputConfig,
-        PythonTrainerConfig, SentencePieceConfig, SoftHyphenPolicy, StripRule, TrainerKind,
-        UnicodeForm, ValidationConfig, ValidationMode,
+        EffectiveConfig, LinePolicy, NormalizationRuleName, OutputConfig, PythonTrainerConfig,
+        SentencePieceConfig, SoftHyphenPolicy, StripRule, TrainerKind, UnicodeForm,
+        ValidationConfig, ValidationMode,
     };
 
     use super::*;
 
-    fn config(work_dir: &Path) -> EffectiveConfig {
+    pub(crate) fn config(work_dir: &Path) -> EffectiveConfig {
         EffectiveConfig {
             preset: "ocr_multilingual".to_owned(),
             num_threads: 16,
@@ -472,7 +477,7 @@ mod tests {
                     args: vec!["run".to_owned(), "python".to_owned()],
                     module: "spm_ocr_train_bridge".to_owned(),
                 },
-                model_type: ModelType::Bpe,
+                algorithm: TrainingAlgorithm::Bpe,
                 vocab_size: 40_000,
                 character_coverage: 0.9998,
                 byte_fallback: true,

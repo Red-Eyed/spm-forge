@@ -24,3 +24,13 @@ The committed report uses the locked wheel result; the exploratory run is not mi
 The corpus has a small, repetitive template grammar. Natural-text compression, dialect
 coverage, behavior at 8,192 pieces, downstream model quality, latency, and statistical
 robustness remain unproven. The next evaluation should use representative untouched data.
+
+Fresh-clone verification used a separate local checkout of `392aea8`, with no existing
+model artifacts or build directory. `uv run --locked demos/mingram/run.py --quiet` built
+the binary, verified the committed text, trained the models, and generated the report.
+
+Configuration integration adds `sentencepiece.model_type: "mingram"` to the ordinary
+training workflow, with optional positive `mingram.iterations` defaulting to 2. A tagged
+algorithm value keeps MinGram options out of the BPE configuration. The Python bridge
+receives BPE seed requests only. Synthetic end-to-end testing verifies the config-driven
+seed, Rust optimizer, final model, ID mapping, and training reports.
