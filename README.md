@@ -105,6 +105,35 @@ where applicable and SentencePiece 0.2.2 defaults otherwise.
 
 ## Development
 
+Compare two standard SentencePiece models on the same held-out text:
+
+```sh
+just cargo-run evaluate --baseline baseline.model --candidate candidate.model --input heldout.txt
+just cargo-run --json evaluate --baseline baseline.model --candidate candidate.model --input heldout.txt --quiet
+```
+
+Multiple files may follow `--input`. Evaluation streams UTF-8 records without corpus repair
+or language balancing. It counts emitted IDs, including byte fallback, without adding BOS/EOS.
+Only LF/CRLF record delimiters are removed; empty records and a final unterminated record
+are preserved. Oversized records fail explicitly (`--max-record-bytes`, default 1 MiB).
+
+The primary metric is candidate total tokens divided by baseline total tokens; below 1 is
+better. Percentage saved is `100 * (1 - ratio)`. Reports include per-file and aggregate counts,
+improved/unchanged/worsened records, unknown IDs, byte tokens, and reconstruction failures.
+Zero baseline tokens produce an explicit undefined metric. Models with different normalization,
+denormalization, or user-defined symbols are rejected conservatively. Vocabulary sizes are
+reported separately: compression comparisons at different sizes do not establish an algorithm gain.
+
+Raw round-trip failures compare decoded IDs with the original record. Normalized failures
+compare the model-normalized decoded text with the model-normalized input, distinguishing
+intentional normalization from information loss. Check both counters and unknown IDs before
+accepting lower counts; lossy encoding is not a compression improvement. These are tokenizer
+metrics, not language-model perplexity or evidence of improved downstream accuracy.
+
+Native encoding uses the standard SentencePiece C++ runtime through Rust bindings. Cargo builds
+the pinned bundled runtime statically. `just` commands use the project's existing uv environment
+to supply CMake automatically; they do not require changes to SentencePiece's C++ source.
+
 ```sh
 just check
 just fmt

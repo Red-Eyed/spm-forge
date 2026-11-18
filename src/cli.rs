@@ -12,6 +12,7 @@ use crate::config::{self, EffectiveConfig};
 use crate::corpus::{self, DiscoveredCorpus};
 use crate::progress::ProgressReporter;
 use crate::repair::{self, RepairSummary};
+use crate::tokenizer::{evaluate, model::Model, records::DEFAULT_MAX_RECORD_BYTES};
 use crate::trainer::{self, TrainerOutput};
 
 #[derive(Debug, Parser)]
@@ -26,6 +27,21 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     Train(TrainArgs),
+    Evaluate(EvaluateArgs),
+}
+
+#[derive(Debug, Args)]
+struct EvaluateArgs {
+    #[arg(long)]
+    baseline: PathBuf,
+    #[arg(long)]
+    candidate: PathBuf,
+    #[arg(long, required = true, num_args = 1..)]
+    input: Vec<PathBuf>,
+    #[arg(long, default_value_t = DEFAULT_MAX_RECORD_BYTES)]
+    max_record_bytes: usize,
+    #[arg(long)]
+    quiet: bool,
 }
 
 #[derive(Debug, Args)]
@@ -80,7 +96,58 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Command::Train(args) => train(args, cli.json, &cancellation),
+        Command::Evaluate(args) => evaluate_models(args, cli.json, &cancellation),
     }
+}
+
+fn evaluate_models(
+    args: EvaluateArgs,
+    json_output: bool,
+    cancellation: &CancellationToken,
+) -> Result<()> {
+    let baseline = Model::load(&args.baseline)?;
+    let candidate = Model::load(&args.candidate)?;
+    let report = evaluate::compare(
+        &baseline,
+        &candidate,
+        &args.input,
+        args.max_record_bytes,
+        args.quiet,
+        cancellation,
+    )?;
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!(
+            "Vocabulary: baseline {}, candidate {}",
+            report.baseline_vocab_size, report.candidate_vocab_size
+        );
+        for file in &report.files {
+            print_metrics(&file.input.display().to_string(), &file.metrics);
+        }
+        print_metrics("Total", &report.total);
+    }
+    Ok(())
+}
+
+fn print_metrics(label: &str, metrics: &evaluate::Metrics) {
+    println!(
+        "{label}: {} records, {} → {} tokens",
+        metrics.counts.records, metrics.counts.baseline.tokens, metrics.counts.candidate.tokens
+    );
+    match metrics.percent_tokens_saved {
+        evaluate::Ratio::Defined { value } => println!("  Tokens saved: {value:.3}%"),
+        evaluate::Ratio::Undefined { reason } => println!("  Tokens saved: undefined ({reason})"),
+    }
+    println!(
+        "  Records: {} improved, {} unchanged, {} worsened",
+        metrics.counts.improved_records,
+        metrics.counts.unchanged_records,
+        metrics.counts.worsened_records
+    );
+    println!("  Raw round-trip failures: baseline {}, candidate {}; normalized failures: baseline {}, candidate {}",
+        metrics.counts.baseline.raw_round_trip_failures, metrics.counts.candidate.raw_round_trip_failures,
+        metrics.counts.baseline.normalized_round_trip_failures, metrics.counts.candidate.normalized_round_trip_failures);
 }
 
 fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -> Result<()> {
@@ -332,6 +399,7 @@ mod tests {
 
         match cli.command {
             Command::Train(args) => assert!(args.train_only),
+            other => panic!("expected train, got {other:?}"),
         }
     }
 
