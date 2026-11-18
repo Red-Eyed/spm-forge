@@ -9,13 +9,17 @@ of corpus repair, language identification, balancing, and OCR configuration.
   segmentation self-tests are removed.
 - `wire.rs` implements selective protobuf field replacement using prost's wire decoder, so
   importing a model from a newer SentencePiece schema does not discard unknown fields.
-- `records.rs` replays one file at a time. Only LF/CRLF delimiters are removed. Invalid UTF-8,
+- `records.rs` replays one file at a time in record- and byte-bounded batches. Only LF/CRLF delimiters are removed. Invalid UTF-8,
   excessive record size, encoding errors, and cancellation are explicit failures.
 - `evaluate.rs` accumulates actual emitted-ID counts and reconstruction diagnostics. It uses
   no model-piece likelihood as a proxy for compression or downstream quality.
 - `mingram.rs` runs hard EM, ranks removable pieces using full-precision integer usage counts,
   pins non-normal IDs, preserves character coverage, and exports a standard Unigram model.
   The CLI supplies paths and output policy; existing seed generation remains in the trainer bridge.
+- `checkpoint.rs` publishes checksummed snapshots with atomic renames. The workflow validates
+  the saved corpus before supplying its identity; core counting keys also include the exact
+  model, ordered inputs, semantic options, phase, and protocol version. Thread count is
+  operational and does not invalidate checkpoints.
 
 Training follows [MinGram](https://arxiv.org/abs/2606.27019): count tokens under a
 token-count-dominated score, update log frequencies, then perform flat score pruning. The
@@ -55,3 +59,17 @@ Global percentiles merge histograms; global utilization takes the union of IDs, 
 per-shard counts. Code points/token uses prepared source code points, and P50/P95 use nearest
 rank. Automatic training compares MinGram with a separately fitted BPE model at the same total
 vocabulary budget; a BPE configuration compares its model with itself.
+
+
+MinGram counts records in parallel through the binding's safe shared processor API. Workers
+own independent integer counters, merged in batch order; model reestimation and pruning stay
+unchanged. Every pass retains the same encode/decode/normalization validation. Runtime state
+is bounded by batch size and worker count times vocabulary size. `main.rs` forbids unsafe code
+in this crate; the existing native runtime remains behind the dependency's safe API.
+
+Each completed corpus file commits cumulative counters and the next file index. A partial
+file never updates persisted counters. Completed passes reconstruct their models from exact
+counts, allowing resumed and uninterrupted exports to be byte-identical. Tests verify this
+across thread counts, including unknowns, byte fallback, incompatible snapshots, interrupted
+exports, and older completed seed adoption. Atomic file publication and a separate completion
+marker prevent partially exported models from being reused as completed stages.

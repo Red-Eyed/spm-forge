@@ -8,12 +8,17 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Context, Result};
-use indicatif::ProgressBar;
+use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use sentencepiece_model::{ModelType, SentencePiece, Type};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use super::{model::Model, records};
+use super::{
+    checkpoint::{self, Store},
+    model::Model,
+    records,
+};
 use crate::cancel::CancellationToken;
+use crate::progress::ProgressReporter;
 
 const SCORE_DELTA: f64 = 1.0 / 100_000.0;
 const UNUSED_LOG_PROBABILITY: f64 = -100.0;
@@ -25,7 +30,7 @@ pub struct Options {
     pub quiet: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PassReport {
     pub phase: String,
     pub records: u64,
@@ -61,9 +66,38 @@ pub struct Trained {
     pub report: Report,
 }
 
+#[derive(Serialize, Deserialize)]
 struct Usage {
     counts: Vec<u64>,
     report: PassReport,
+}
+
+pub struct Runtime<'a> {
+    pool: ThreadPool,
+    progress: &'a ProgressReporter,
+    checkpoints: Option<&'a Store>,
+}
+
+impl<'a> Runtime<'a> {
+    pub fn new(
+        threads: usize,
+        progress: &'a ProgressReporter,
+        checkpoints: Option<&'a Store>,
+    ) -> Result<Self> {
+        ensure!(threads > 0, "thread count must be positive");
+        Ok(Self {
+            pool: ThreadPoolBuilder::new().num_threads(threads).build()?,
+            progress,
+            checkpoints,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Snapshot {
+    next_file: usize,
+    bytes: u64,
+    usage: Usage,
 }
 
 /// Replays corpus files for each pass, retaining only per-vocabulary counts and one record.
@@ -74,8 +108,24 @@ pub fn train(
     options: &Options,
     cancellation: &CancellationToken,
 ) -> Result<Trained> {
+    let progress = if options.quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(false)
+    };
+    let runtime = Runtime::new(1, &progress, None)?;
+    train_with_runtime(seed, inputs, options, &runtime, cancellation)
+}
+
+pub fn train_with_runtime(
+    seed: &Model,
+    inputs: &[PathBuf],
+    options: &Options,
+    runtime: &Runtime<'_>,
+    cancellation: &CancellationToken,
+) -> Result<Trained> {
     validate(seed, inputs, options)?;
-    let initial = count(seed, inputs, options, "seed", cancellation)?;
+    let initial = count(seed, inputs, options, "seed", runtime, cancellation)?;
     let mut counts = initial.counts;
     let mut model = reestimate(seed, &counts)?;
     let mut passes = vec![initial.report];
@@ -85,6 +135,7 @@ pub fn train(
             inputs,
             options,
             &format!("hard_em_{}", iteration + 1),
+            runtime,
             cancellation,
         )?;
         model = reestimate(&model, &usage.counts)?;
@@ -103,7 +154,7 @@ pub fn train(
         })
         .collect();
     model = model.with_pieces(&selected)?;
-    let final_usage = count(&model, inputs, options, "final", cancellation)?;
+    let final_usage = count(&model, inputs, options, "final", runtime, cancellation)?;
     passes.push(final_usage.report);
     Ok(Trained {
         report: Report {
@@ -160,43 +211,160 @@ fn protected(piece: &SentencePiece) -> bool {
     piece.r#type() != Type::Normal || piece.piece().chars().count() == 1
 }
 
+fn empty_usage(model: &Model, phase: &str) -> Usage {
+    Usage {
+        counts: vec![0; model.proto.pieces.len()],
+        report: PassReport {
+            phase: phase.into(),
+            records: 0,
+            tokens: 0,
+            byte_tokens: 0,
+            used_pieces: 0,
+        },
+    }
+}
+
+fn merge_usage(total: &mut Usage, part: Usage) {
+    for (total, count) in total.counts.iter_mut().zip(part.counts) {
+        *total += count;
+    }
+    total.report.records += part.report.records;
+    total.report.tokens += part.report.tokens;
+    total.report.byte_tokens += part.report.byte_tokens;
+}
+
+fn count_key(
+    model: &Model,
+    inputs: &[PathBuf],
+    options: &Options,
+    phase: &str,
+    runtime: &Runtime<'_>,
+) -> Result<String> {
+    checkpoint::key(&(
+        1,
+        runtime.checkpoints.map(|s| s.identity.as_str()),
+        inputs,
+        model.fingerprint(),
+        options.vocab_size,
+        options.iterations,
+        options.max_record_bytes,
+        phase,
+    ))
+}
+
 fn count(
     model: &Model,
     inputs: &[PathBuf],
     options: &Options,
     phase: &str,
+    runtime: &Runtime<'_>,
     cancellation: &CancellationToken,
 ) -> Result<Usage> {
-    let mut counts = vec![0_u64; model.proto.pieces.len()];
-    let mut report = PassReport {
-        phase: phase.to_owned(),
-        records: 0,
-        tokens: 0,
-        byte_tokens: 0,
-        used_pieces: 0,
-    };
-    for path in inputs {
-        let progress = if options.quiet {
-            ProgressBar::hidden()
-        } else {
-            ProgressBar::new(path.metadata()?.len())
-        };
-        progress.set_message(format!("MinGram {phase}: {}", path.display()));
-        records::visit(
-            path,
-            options.max_record_bytes,
-            cancellation,
-            |text, bytes| {
-                observe(model, text, &mut counts, &mut report)?;
-                progress.inc(bytes);
-                Ok(())
-            },
-        )?;
-        progress.finish_and_clear();
+    let key = count_key(model, inputs, options, phase, runtime)?;
+    let restored = runtime
+        .checkpoints
+        .map(|store| store.read::<Snapshot>(phase, &key))
+        .transpose()?
+        .flatten();
+    let mut state = restored.unwrap_or_else(|| Snapshot {
+        next_file: 0,
+        bytes: 0,
+        usage: empty_usage(model, phase),
+    });
+    ensure!(
+        state.next_file <= inputs.len()
+            && state.usage.counts.len() == model.proto.pieces.len()
+            && state.usage.report.phase == phase
+            && state.usage.counts.iter().sum::<u64>() == state.usage.report.tokens,
+        "invalid MinGram checkpoint counters"
+    );
+    let sizes: Vec<_> = inputs
+        .iter()
+        .map(|path| path.metadata().map(|m| m.len()))
+        .collect::<std::io::Result<_>>()?;
+    ensure!(
+        state.bytes == sizes[..state.next_file].iter().sum::<u64>(),
+        "checkpoint byte offset differs from corpus"
+    );
+    let stage = runtime.progress.stage_bar(
+        format!(
+            "MinGram {phase}: {} threads, {} completed files, {} saved records",
+            runtime.pool.current_num_threads(),
+            state.next_file,
+            state.usage.report.records
+        ),
+        sizes.iter().sum(),
+    );
+    stage.inc(state.bytes);
+    for (index, path) in inputs.iter().enumerate().skip(state.next_file) {
+        cancellation.check()?;
+        stage.set_message(format!(
+            "MinGram {phase}: file {}/{}, {} records",
+            index + 1,
+            inputs.len(),
+            state.usage.report.records
+        ));
+        records::batches(path, options.max_record_bytes, cancellation, |batch| {
+            let parts = count_batch(model, &batch, runtime, cancellation).with_context(|| {
+                format!("counting {} from line {}", path.display(), batch.first_line)
+            })?;
+            for part in parts {
+                merge_usage(&mut state.usage, part);
+            }
+            stage.inc(batch.bytes);
+            state.bytes += batch.bytes;
+            Ok(())
+        })?;
+        state.next_file = index + 1;
+        state.usage.report.used_pieces = state.usage.counts.iter().filter(|c| **c > 0).count();
+        if let Some(store) = runtime.checkpoints {
+            store.write(phase, &key, &state)?;
+        }
     }
-    ensure!(report.tokens > 0, "training corpus emits no tokens");
-    report.used_pieces = counts.iter().filter(|c| **c > 0).count();
-    Ok(Usage { counts, report })
+    ensure!(
+        state.usage.report.tokens > 0,
+        "training corpus emits no tokens"
+    );
+    stage.finish(format!(
+        "MinGram {phase}: {} records, {} tokens",
+        state.usage.report.records, state.usage.report.tokens
+    ));
+    Ok(state.usage)
+}
+
+fn count_batch(
+    model: &Model,
+    batch: &records::Batch,
+    runtime: &Runtime<'_>,
+    cancellation: &CancellationToken,
+) -> Result<Vec<Usage>> {
+    let chunk_size = batch
+        .records
+        .len()
+        .div_ceil(runtime.pool.current_num_threads())
+        .max(1);
+    runtime.pool.install(|| {
+        batch
+            .records
+            .par_chunks(chunk_size)
+            .enumerate()
+            .map(|(chunk, records)| {
+                let mut usage = empty_usage(model, "batch");
+                for (offset, text) in records.iter().enumerate() {
+                    cancellation.check()?;
+                    observe(model, text, &mut usage.counts, &mut usage.report).with_context(
+                        || {
+                            format!(
+                                "record {}",
+                                batch.first_line + (chunk * chunk_size + offset) as u64
+                            )
+                        },
+                    )?;
+                }
+                Ok(usage)
+            })
+            .collect()
+    })
 }
 
 fn observe(model: &Model, text: &str, counts: &mut [u64], report: &mut PassReport) -> Result<()> {
@@ -309,4 +477,112 @@ pub fn save(trained: &Trained, output: &Path) -> Result<()> {
     let mut model_file = File::options().write(true).create_new(true).open(output)?;
     model_file.write_all(trained.model.serialized())?;
     Ok(())
+}
+
+/// Publishes stage artifacts atomically; the workflow owns compatibility and completion markers.
+pub(crate) fn save_atomic(trained: &Trained, output: &Path) -> Result<()> {
+    let mut vocab = Vec::new();
+    for piece in &trained.model.proto.pieces {
+        writeln!(vocab, "{}\t{}", piece.piece(), piece.score())?;
+    }
+    checkpoint::atomic_write(&output.with_extension("vocab"), &vocab)?;
+    checkpoint::atomic_write(
+        &output.with_extension("mingram.json"),
+        &serde_json::to_vec_pretty(&trained.report)?,
+    )?;
+    checkpoint::atomic_write(output, trained.model.serialized())
+}
+
+#[cfg(test)]
+mod checkpoint_tests {
+    use super::*;
+
+    fn options(size: usize) -> Options {
+        Options {
+            vocab_size: size,
+            iterations: 2,
+            max_record_bytes: 1024,
+            quiet: true,
+        }
+    }
+
+    #[test]
+    fn parallel_and_file_resumed_models_match_sequential_bytes_and_reports() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let seed =
+            crate::tokenizer::tests::model(&["a", "b", "ab", "ก", "้", "ก้", "中", "文", "中文"]);
+        let first = temp.path().join("first.txt");
+        let second = temp.path().join("second.txt");
+        fs::write(&first, "abก้中文\n".repeat(records::BATCH_RECORDS + 3)).unwrap();
+        fs::write(&second, "中文abก้\n".repeat(31)).unwrap();
+        let inputs = vec![first.clone(), second];
+        let options = options(seed.proto.pieces.len() - 1);
+        let cancel = CancellationToken::default();
+        let progress = ProgressReporter::silent();
+        let sequential = train(&seed, &inputs, &options, &cancel).unwrap();
+        let parallel = train_with_runtime(
+            &seed,
+            &inputs,
+            &options,
+            &Runtime::new(4, &progress, None).unwrap(),
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(sequential.model.serialized(), parallel.model.serialized());
+        assert_eq!(
+            serde_json::to_value(&sequential.report).unwrap(),
+            serde_json::to_value(&parallel.report).unwrap()
+        );
+
+        let prefix = count(
+            &seed,
+            std::slice::from_ref(&first),
+            &options,
+            "seed",
+            &Runtime::new(1, &progress, None).unwrap(),
+            &cancel,
+        )
+        .unwrap();
+        let store = Store::new(temp.path().join("checkpoints"), "verified-corpus".into());
+        let runtime = Runtime::new(3, &progress, Some(&store)).unwrap();
+        let key = count_key(&seed, &inputs, &options, "seed", &runtime).unwrap();
+        store
+            .write(
+                "seed",
+                &key,
+                &Snapshot {
+                    next_file: 1,
+                    bytes: first.metadata().unwrap().len(),
+                    usage: prefix,
+                },
+            )
+            .unwrap();
+        let resumed = train_with_runtime(&seed, &inputs, &options, &runtime, &cancel).unwrap();
+        assert_eq!(sequential.model.serialized(), resumed.model.serialized());
+        assert_eq!(
+            serde_json::to_value(&sequential.report).unwrap(),
+            serde_json::to_value(&resumed.report).unwrap()
+        );
+        let completed = train_with_runtime(
+            &seed,
+            &inputs,
+            &options,
+            &Runtime::new(2, &progress, Some(&store)).unwrap(),
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(completed.model.serialized(), resumed.model.serialized());
+        let mut incompatible = options;
+        incompatible.iterations += 1;
+        assert!(train_with_runtime(&seed, &inputs, &incompatible, &runtime, &cancel).is_err());
+        let other = Store::new(temp.path().join("checkpoints"), "different-corpus".into());
+        assert!(train_with_runtime(
+            &seed,
+            &inputs,
+            &incompatible,
+            &Runtime::new(2, &progress, Some(&other)).unwrap(),
+            &cancel
+        )
+        .is_err());
+    }
 }

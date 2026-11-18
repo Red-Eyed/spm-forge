@@ -616,3 +616,95 @@ for text, expected in zip(data['samples'], data['counts']):
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn parallel_evaluation_matches_sequential_metrics_exactly() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("heldout.txt");
+    fs::write(&path, "ab\nก้\n中文\n\n".repeat(records::BATCH_RECORDS + 1)).unwrap();
+    let baseline = model(&["a", "b", "ก", "้", "中", "文"]);
+    let candidate = model(&["ab", "ก้", "中文", "a", "ก", "中"]);
+    let inputs = [path];
+    let cancel = CancellationToken::default();
+    let serial = evaluate::compare(&baseline, &candidate, &inputs, 1024, true, &cancel).unwrap();
+    let parallel = evaluate::compare_with_options(
+        &baseline,
+        &candidate,
+        &inputs,
+        &evaluate::Options {
+            max_record_bytes: 1024,
+            threads: 4,
+            progress: &crate::progress::ProgressReporter::silent(),
+        },
+        &cancel,
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(serial).unwrap(),
+        serde_json::to_value(parallel).unwrap()
+    );
+}
+
+#[test]
+fn batches_bound_records_and_bytes_and_preserve_delimiters() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("records.txt");
+    fs::write(&path, "x\r\n".repeat(records::BATCH_RECORDS * 2 + 1)).unwrap();
+    let mut sizes = Vec::new();
+    records::batches(&path, 1024, &CancellationToken::default(), |batch| {
+        assert!(batch.records.len() <= records::BATCH_RECORDS);
+        assert!(batch.bytes <= (records::BATCH_BYTES + 1024 + 3) as u64);
+        assert!(batch.records.iter().all(|text| text == "x"));
+        sizes.push((batch.records.len(), batch.bytes, batch.first_line));
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        sizes,
+        vec![(4096, 12288, 1), (4096, 12288, 4097), (1, 3, 8193)]
+    );
+    fs::write(&path, format!("{}\n", "a".repeat(1024 * 1024)).repeat(6)).unwrap();
+    let mut bytes = Vec::new();
+    records::batches(&path, 1024 * 1024, &CancellationToken::default(), |batch| {
+        bytes.push(batch.bytes);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(bytes.len(), 2);
+}
+
+#[test]
+fn parallel_counting_preserves_byte_fallback_and_rejects_unknowns() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("byte-records.txt");
+    fs::write(&path, "a中\n".repeat(records::BATCH_RECORDS + 1)).unwrap();
+    let seed = Model::from_bytes(&byte_proto().encode_to_vec()).unwrap();
+    let inputs = [path];
+    let progress = crate::progress::ProgressReporter::silent();
+    let runtime = mingram::Runtime::new(4, &progress, None).unwrap();
+    let cancel = CancellationToken::default();
+    let serial =
+        mingram::train(&seed, &inputs, &options(seed.proto.pieces.len()), &cancel).unwrap();
+    let parallel = mingram::train_with_runtime(
+        &seed,
+        &inputs,
+        &options(seed.proto.pieces.len()),
+        &runtime,
+        &cancel,
+    )
+    .unwrap();
+    assert_eq!(serial.model.serialized(), parallel.model.serialized());
+    assert_eq!(
+        serde_json::to_value(serial.report).unwrap(),
+        serde_json::to_value(parallel.report).unwrap()
+    );
+    let unknown = model(&["a"]);
+    assert!(mingram::train_with_runtime(
+        &unknown,
+        &inputs,
+        &options(unknown.proto.pieces.len()),
+        &runtime,
+        &cancel
+    )
+    .is_err());
+}

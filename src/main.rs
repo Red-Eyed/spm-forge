@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod balance;
 mod cancel;
 mod cli;

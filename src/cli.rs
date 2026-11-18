@@ -50,6 +50,8 @@ struct MingramArgs {
     config: PathBuf,
     #[arg(long, default_value = "cfg.json.ocr")]
     preset_config: PathBuf,
+    #[arg(long, default_value_t = default_threads())]
+    num_threads: usize,
     #[arg(long)]
     quiet: bool,
 }
@@ -64,6 +66,8 @@ struct EvaluateArgs {
     input: Vec<PathBuf>,
     #[arg(long, default_value_t = DEFAULT_MAX_RECORD_BYTES)]
     max_record_bytes: usize,
+    #[arg(long, default_value_t = default_threads())]
+    num_threads: usize,
     #[arg(long)]
     quiet: bool,
 }
@@ -119,6 +123,10 @@ struct TrainOnlySummary {
     model_prefix: String,
 }
 
+fn default_threads() -> usize {
+    std::thread::available_parallelism().map_or(1, usize::from)
+}
+
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     let cancellation =
@@ -159,7 +167,17 @@ fn train_mingram(
         max_record_bytes: args.max_record_bytes,
         quiet: args.quiet,
     };
-    let trained = mingram::train(&seed, &args.input, &options, cancellation)?;
+    let progress = if args.quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(json_output)
+    };
+    let trained = if args.num_threads == 1 {
+        mingram::train(&seed, &args.input, &options, cancellation)?
+    } else {
+        let runtime = mingram::Runtime::new(args.num_threads, &progress, None)?;
+        mingram::train_with_runtime(&seed, &args.input, &options, &runtime, cancellation)?
+    };
     cancellation.check()?;
     mingram::save(&trained, &args.output)?;
     if json_output {
@@ -218,14 +236,33 @@ fn evaluate_models(
 ) -> Result<()> {
     let baseline = Model::load(&args.baseline)?;
     let candidate = Model::load(&args.candidate)?;
-    let report = evaluate::compare(
-        &baseline,
-        &candidate,
-        &args.input,
-        args.max_record_bytes,
-        args.quiet,
-        cancellation,
-    )?;
+    let progress = if args.quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(json_output)
+    };
+    let report = if args.num_threads == 1 {
+        evaluate::compare(
+            &baseline,
+            &candidate,
+            &args.input,
+            args.max_record_bytes,
+            args.quiet,
+            cancellation,
+        )?
+    } else {
+        evaluate::compare_with_options(
+            &baseline,
+            &candidate,
+            &args.input,
+            &evaluate::Options {
+                max_record_bytes: args.max_record_bytes,
+                threads: args.num_threads,
+                progress: &progress,
+            },
+            cancellation,
+        )?
+    };
     if json_output {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -287,7 +324,7 @@ fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -
     }
     cancellation.check()?;
     let balance = balance_corpus(&config, &repair, &progress)?;
-    let split = save_split(&config, &repair, &balance, cancellation)?;
+    let split = save_split(&config, &repair, &balance, &progress, cancellation)?;
     cancellation.check()?;
     let trainer =
         crate::training_workflow::train_and_report(&config, &split, &progress, cancellation)
@@ -456,6 +493,7 @@ fn train_sentencepiece(
         &config.output.work_dir.join("reports/split.json"),
         &config.evaluation,
         &preparation_hash(config)?,
+        progress,
         cancellation,
     )?;
     ensure!(
@@ -479,6 +517,7 @@ fn save_split(
     config: &EffectiveConfig,
     repair: &RepairSummary,
     balance: &BalanceSummary,
+    progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<crate::corpus_split::SplitManifest> {
     let tests: Vec<_> = repair.test_shards.iter().map(|s| s.path.clone()).collect();
@@ -487,8 +526,11 @@ fn save_split(
         &tests,
         config.evaluation.clone(),
         preparation_hash(config)?,
-        repair.training_records,
-        repair.test_records,
+        crate::corpus_split::SourceRecords {
+            training: repair.training_records,
+            test: repair.test_records,
+        },
+        progress,
         cancellation,
     )?;
     split.save(&config.output.work_dir.join("reports/split.json"))?;

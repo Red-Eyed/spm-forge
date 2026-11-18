@@ -16,7 +16,8 @@ retain their OCR-specific mapping policies.
 `evaluation.split_seed` defaults to 42. Content hashing assigns canonical original records
 before chunking. Balancing, BPE seed training, MinGram, and the equal-size BPE baseline consume
 training files only. The saved split and checksums are reused by `train-only`; a changed split
-or preparation config requires a fresh preparation run. Choose a fresh model prefix to retrain.
+or preparation config requires a fresh preparation run. `train-only` with the same model
+prefix resumes compatible work; choose a fresh prefix for a separate tokenizer fit.
 
 Training writes `reports/tokenizer.md` and `reports/tokenizer.json` automatically, with
 compression, distribution, coverage, reconstruction, and per-shard results. Byte tokens are
@@ -39,8 +40,14 @@ enabled balancing still belong to the existing preparation pipeline.
 The final model, vocabulary, MinGram report/ID mapping, and `trainer_output.json` are written
 under the configured work directory. BPE seed requests and outputs are retained under
 `<model_prefix>.seed/`. The top-level MinGram `trainer_request.json` records optimizer inputs;
-it is not a request for direct replay by the Python bridge. Existing model artifacts are not
-overwritten. MinGram-specific options with `model_type: "bpe"` are rejected.
+it is not a request for direct replay by the Python bridge. `<model_prefix>.checkpoints/`
+contains versioned, checksummed file-boundary counts and artifact completion markers. Resume
+validates corpus/model/config provenance, adopts compatible older completed BPE seeds, and
+repeats only the interrupted MinGram file. Existing untracked model artifacts are not
+overwritten. `num_threads` controls MinGram and paired evaluation as well as repair and native
+training; it may change on resume. No record sampling or reconstruction checks are removed.
+See [resume behavior](../README.md#usage) for stage boundaries and limitations.
+MinGram-specific options with `model_type: "bpe"` are rejected.
 
 ## Existing BPE preset
 

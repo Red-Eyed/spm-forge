@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cancel::CancellationToken;
 use crate::config::EvaluationConfig;
+use crate::progress::{ProgressReporter, StageProgress};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Partition {
@@ -51,34 +52,43 @@ pub struct SplitManifest {
     pub test: Vec<CorpusFile>,
 }
 
+pub struct SourceRecords {
+    pub training: u64,
+    pub test: u64,
+}
+
 impl SplitManifest {
     pub fn create(
         train: &[PathBuf],
         test: &[PathBuf],
         policy: EvaluationConfig,
         preparation_blake3: String,
-        training_records: u64,
-        test_records: u64,
+        records: SourceRecords,
+        progress: &ProgressReporter,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
         ensure!(!train.is_empty() && !test.is_empty(), "train/test split is empty on one side; use more distinct records or adjust evaluation.test_fraction");
         validate_disjoint(train.iter().chain(test.iter()).map(PathBuf::as_path))?;
-        Ok(Self {
+        let total = file_bytes(train.iter().chain(test))?;
+        let stage = progress.stage_bar("hashing prepared train/test corpus", total);
+        let manifest = Self {
             version: 1,
             policy,
             preparation_blake3,
-            training_records_before_balancing: training_records,
-            test_records,
-            train: fingerprint(train, cancellation)?,
-            test: fingerprint(test, cancellation)?,
-        })
+            training_records_before_balancing: records.training,
+            test_records: records.test,
+            train: fingerprint(train, &stage, cancellation)?,
+            test: fingerprint(test, &stage, cancellation)?,
+        };
+        stage.finish("prepared corpus checksums saved");
+        Ok(manifest)
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(path, serde_json::to_vec_pretty(self)?)?;
+        crate::tokenizer::checkpoint::atomic_write(path, &serde_json::to_vec_pretty(self)?)?;
         Ok(())
     }
 
@@ -86,6 +96,7 @@ impl SplitManifest {
         path: &Path,
         policy: &EvaluationConfig,
         preparation_blake3: &str,
+        progress: &ProgressReporter,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
         let bytes =
@@ -104,14 +115,18 @@ impl SplitManifest {
                 .chain(&manifest.test)
                 .map(|file| file.path.as_path()),
         )?;
+        let total = file_bytes(manifest.train.iter().chain(&manifest.test).map(|f| &f.path))?;
+        let stage = progress.stage_bar("verifying saved train/test corpus", total);
         for file in manifest.train.iter().chain(&manifest.test) {
+            stage.set_message(format!("verifying {}", file.path.display()));
             cancellation.check()?;
             ensure!(
-                digest(&file.path, cancellation)? == file.blake3,
+                digest(&file.path, &stage, cancellation)? == file.blake3,
                 "saved corpus changed: {}",
                 file.path.display()
             );
         }
+        stage.finish("saved train/test corpus verified");
         Ok(manifest)
     }
 
@@ -136,20 +151,37 @@ fn validate_disjoint<'a>(paths: impl Iterator<Item = &'a Path>) -> Result<()> {
     Ok(())
 }
 
-fn fingerprint(paths: &[PathBuf], cancellation: &CancellationToken) -> Result<Vec<CorpusFile>> {
+fn file_bytes<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> Result<u64> {
+    paths
+        .map(|p| p.metadata().map(|m| m.len()))
+        .collect::<std::io::Result<Vec<_>>>()
+        .map(|sizes| sizes.iter().sum())
+        .map_err(Into::into)
+}
+
+fn fingerprint(
+    paths: &[PathBuf],
+    progress: &StageProgress,
+    cancellation: &CancellationToken,
+) -> Result<Vec<CorpusFile>> {
     paths
         .iter()
         .map(|path| {
             cancellation.check()?;
+            progress.set_message(format!("hashing {}", path.display()));
             Ok(CorpusFile {
                 path: path.clone(),
-                blake3: digest(path, cancellation)?,
+                blake3: digest(path, progress, cancellation)?,
             })
         })
         .collect()
 }
 
-fn digest(path: &Path, cancellation: &CancellationToken) -> Result<String> {
+fn digest(
+    path: &Path,
+    progress: &StageProgress,
+    cancellation: &CancellationToken,
+) -> Result<String> {
     let mut file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut hash = blake3::Hasher::new();
     let mut buffer = [0_u8; 64 * 1024];
@@ -160,6 +192,7 @@ fn digest(path: &Path, cancellation: &CancellationToken) -> Result<String> {
             break;
         }
         hash.update(&buffer[..read]);
+        progress.inc(read as u64);
     }
     Ok(hash.finalize().to_hex().to_string())
 }
@@ -179,8 +212,11 @@ mod tests {
             std::slice::from_ref(&path),
             EvaluationConfig::default(),
             "settings".into(),
-            1,
-            1,
+            SourceRecords {
+                training: 1,
+                test: 1
+            },
+            &ProgressReporter::silent(),
             &CancellationToken::default(),
         )
         .is_err());
@@ -216,8 +252,11 @@ mod tests {
             std::slice::from_ref(&test),
             policy.clone(),
             "settings".into(),
-            1,
-            1,
+            SourceRecords {
+                training: 1,
+                test: 1,
+            },
+            &ProgressReporter::silent(),
             &CancellationToken::default(),
         )
         .unwrap();
@@ -227,6 +266,7 @@ mod tests {
             &path,
             &policy,
             "changed-settings",
+            &ProgressReporter::silent(),
             &CancellationToken::default()
         )
         .is_err());
@@ -236,15 +276,26 @@ mod tests {
             &path,
             &changed_policy,
             "settings",
+            &ProgressReporter::silent(),
             &CancellationToken::default()
         )
         .is_err());
-        assert!(
-            SplitManifest::load(&path, &policy, "settings", &CancellationToken::default()).is_ok()
-        );
+        assert!(SplitManifest::load(
+            &path,
+            &policy,
+            "settings",
+            &ProgressReporter::silent(),
+            &CancellationToken::default()
+        )
+        .is_ok());
         fs::write(test, "changed").unwrap();
-        assert!(
-            SplitManifest::load(&path, &policy, "settings", &CancellationToken::default()).is_err()
-        );
+        assert!(SplitManifest::load(
+            &path,
+            &policy,
+            "settings",
+            &ProgressReporter::silent(),
+            &CancellationToken::default()
+        )
+        .is_err());
     }
 }

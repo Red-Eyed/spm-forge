@@ -73,7 +73,8 @@ Minimal `cfg.json`:
 }
 ```
 
-`num_threads` applies to both corpus repair and SentencePiece training.
+`num_threads` applies to corpus repair, native SentencePiece training, MinGram counting,
+and held-out evaluation.
 
 To use a specialized preset, change only the preset name:
 
@@ -114,12 +115,37 @@ not differences in operating systems, shared libraries, or compiler installation
 Press Ctrl+C to stop a run. During SentencePiece training, `spm-ocr` also stops the Python
 trainer subprocess before exiting.
 
-To reuse a prepared corpus and its saved split, choose a fresh `model_prefix` in the same
-`work_dir`, then run:
+To continue an interrupted run, keep the same `work_dir` and `model_prefix`, then run:
 
 ```sh
-just train-only
+just train-only cfg.mingram.json
 ```
+
+This verifies saved corpus checksums, skips discovery/fixing/balancing, and reuses a completed
+BPE seed, MinGram model, matched BPE baseline, and evaluation when their checkpoints match.
+MinGram saves cumulative integer counts after each completed corpus file; an interrupted
+file is repeated from its beginning, while completed files and passes are reused. Atomic,
+checksummed snapshots live in `<model_prefix>.checkpoints/`. Export completion is recorded
+only after all artifact files have been published. Do not delete that directory to resume.
+
+Older runs without MinGram checkpoints can still reuse a completed seed when its saved
+request, success status, vocabulary, and current split checks agree. MinGram counting then
+starts again; work performed by the old version without checkpoints cannot be recovered.
+An incomplete native BPE fit restarts that fit. An interrupted evaluation restarts evaluation;
+completed evaluation is reused. Fixing/balancing must have finished and `reports/split.json`
+must exist. Only one process should write to a work directory at a time, and prepared text
+must remain unchanged throughout training.
+
+Thread count may change when resuming. Changed semantic settings, corpus contents, model
+artifacts, or corrupt checkpoints cause an explicit error. Use a new model prefix to train a
+new tokenizer from the same prepared split, or a new work directory for changed preparation
+settings. Untracked existing MinGram outputs are never silently overwritten.
+
+Long corpus stages show byte progress with elapsed time and ETA in a terminal. Non-interactive
+HPC logs and `--json` mode emit periodic progress to stderr while stdout remains structured.
+Native BPE training, discovery, and other stages without a reliable total use a spinner/status
+instead of a fabricated completion percentage. Corpus checksum verification still rereads
+prepared text on resume; its progress is now visible.
 
 The Python trainer's explicit named options and fallback defaults are in
 [`spm_ocr_train_bridge.py`](spm_ocr_train_bridge.py), in `_train`. Request values override
@@ -202,11 +228,11 @@ just train cfg.mingram.json
 just train-only cfg.mingram.json
 ```
 
-Both commands select Rust MinGram after the existing corpus-preparation stage. The configured
-Python trainer generates the BPE seed only; Rust performs optimization and export. Final files
-use the configured `output.work_dir` and `output.model_prefix`. The seed lives in a separate
-`<model_prefix>.seed/` directory. Existing MinGram outputs are not overwritten; use a new
-prefix or work directory for another run. BPE remains the default for existing configurations.
+Both commands select Rust MinGram; `train-only` reuses completed preparation and compatible
+training checkpoints. The configured Python runner trains the BPE seed and matched baseline;
+Rust performs MinGram optimization and export. Final files use `output.work_dir` and
+`output.model_prefix`; the seed lives in `<model_prefix>.seed/`. Existing OCR presets remain
+BPE configurations; the default multilingual preset selects MinGram.
 
 Reduce an existing BPE or Unigram candidate vocabulary using Rust MinGram training:
 
@@ -225,10 +251,22 @@ Automatic seeding uses the configuration's SentencePiece settings and a seed voc
 specified UTF-8 files directly, without OCR repair or language balancing. A BPE seed follows
 the paper's initialization; importing an existing Unigram model is an additional adaptation.
 The initial native BPE trainer has its own memory and sentence-sampling behavior. Rust MinGram
-passes stream the files, keeping vocabulary counts and one bounded record in memory.
+passes stream bounded batches, retaining at most 4 MiB plus one size-limited record and
+4,096 records per batch. Workers maintain separate vocabulary-sized counters; no corpus-sized
+array is retained. Integer reductions preserve single-threaded counts. Every record still
+receives unknown-ID and normalized reconstruction checks on every pass; no sampling or
+validation shortcut was introduced. Standalone `mingram` and `evaluate` accept `--num-threads`
+and default to Rust's available parallelism; configured training uses `num_threads`. The
+standalone `mingram` command remains a fresh export; resumable stages belong to `train-only`.
+
+A local standalone release benchmark on 7.998 MB / 160,000 repeated multilingual records
+and an 8,192-piece output took 2.395–2.410 seconds before, versus 0.718–0.958 seconds with
+eight threads. All four exported models were byte-identical. This is a cached local-storage
+measurement without workflow checkpoint writes, not an HPC speedup guarantee; details and
+resume validation are in [the experiment log](demos/mingram/DEVLOG.md).
 
 MinGram initializes probabilities from a seed-encoding pass, then runs two hard-EM passes
-(`--iterations` overrides this). It uses the reference score `-1 + 0.00001 * log_probability`,
+(`--iterations` overrides this), followed by a final counting pass after pruning. It uses the reference score `-1 + 0.00001 * log_probability`,
 then prunes by usage counts, which rank the same as unrounded probabilities. Zero-use normal
 pieces retain a finite log-probability floor of -100; they may fill otherwise unused slots to
 preserve an exact vocabulary budget. Every single-code-point piece and non-normal piece is

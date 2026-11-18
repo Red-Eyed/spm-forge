@@ -4,12 +4,13 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Result};
-use indicatif::ProgressBar;
+use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use sentencepiece_model::Type;
 use serde::Serialize;
 
 use super::{model::Model, records};
 use crate::cancel::CancellationToken;
+use crate::progress::{ProgressReporter, StageProgress};
 
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -129,9 +130,53 @@ pub fn compare(
     quiet: bool,
     cancellation: &CancellationToken,
 ) -> Result<Report> {
+    let progress = if quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(false)
+    };
+    compare_with_options(
+        baseline,
+        candidate,
+        inputs,
+        &Options {
+            max_record_bytes,
+            threads: 1,
+            progress: &progress,
+        },
+        cancellation,
+    )
+}
+
+pub struct Options<'a> {
+    pub max_record_bytes: usize,
+    pub threads: usize,
+    pub progress: &'a ProgressReporter,
+}
+
+pub fn compare_with_options(
+    baseline: &Model,
+    candidate: &Model,
+    inputs: &[PathBuf],
+    options: &Options<'_>,
+    cancellation: &CancellationToken,
+) -> Result<Report> {
     ensure!(!inputs.is_empty(), "at least one input file is required");
     ensure!(baseline.same_normalization(candidate),
         "normalization, denormalization, or user-defined symbols differ; token counts are not comparable");
+    ensure!(options.threads > 0, "thread count must be positive");
+    let pool = ThreadPoolBuilder::new()
+        .num_threads(options.threads)
+        .build()?;
+    let bytes: u64 = inputs
+        .iter()
+        .map(|p| p.metadata().map(|m| m.len()))
+        .collect::<std::io::Result<Vec<_>>>()?
+        .iter()
+        .sum();
+    let stage = options
+        .progress
+        .stage_bar("evaluating held-out tokenizer pairs", bytes);
     let mut files = Vec::new();
     let mut total = Counts::default();
     for path in inputs {
@@ -139,8 +184,9 @@ pub fn compare(
             baseline,
             candidate,
             path,
-            max_record_bytes,
-            quiet,
+            options.max_record_bytes,
+            &pool,
+            &stage,
             cancellation,
         )?;
         total.add(&counts);
@@ -149,6 +195,7 @@ pub fn compare(
             metrics: counts.into(),
         });
     }
+    stage.finish(format!("evaluated {} records", total.records));
     Ok(Report {
         baseline_model_blake3: baseline.fingerprint(),
         candidate_model_blake3: candidate.fingerprint(),
@@ -166,32 +213,38 @@ fn compare_file(
     candidate: &Model,
     path: &Path,
     max_record_bytes: usize,
-    quiet: bool,
+    pool: &ThreadPool,
+    progress: &StageProgress,
     cancellation: &CancellationToken,
 ) -> Result<Counts> {
-    let progress = if quiet {
-        ProgressBar::hidden()
-    } else {
-        ProgressBar::new(path.metadata()?.len())
-    };
     progress.set_message(format!("evaluating {}", path.display()));
     let mut counts = Counts::default();
-    records::visit(path, max_record_bytes, cancellation, |text, bytes| {
-        let before = counts.baseline.observe(baseline, text)?;
-        let after = counts.candidate.observe(candidate, text)?;
-        counts.records += 1;
-        counts.empty_records += u64::from(text.is_empty());
-        counts.text_bytes += text.len() as u64;
-        counts.text_codepoints += text.chars().count() as u64;
-        match after.cmp(&before) {
-            std::cmp::Ordering::Less => counts.improved_records += 1,
-            std::cmp::Ordering::Equal => counts.unchanged_records += 1,
-            std::cmp::Ordering::Greater => counts.worsened_records += 1,
+    records::batches(path, max_record_bytes, cancellation, |batch| {
+        let size = batch
+            .records
+            .len()
+            .div_ceil(pool.current_num_threads())
+            .max(1);
+        let parts: Result<Vec<Counts>> = pool.install(|| {
+            batch
+                .records
+                .par_chunks(size)
+                .map(|records| {
+                    let mut local = Counts::default();
+                    for text in records {
+                        cancellation.check()?;
+                        local.observe(baseline, candidate, text)?;
+                    }
+                    Ok(local)
+                })
+                .collect()
+        });
+        for part in parts? {
+            counts.add(&part);
         }
-        progress.inc(bytes);
+        progress.inc(batch.bytes);
         Ok(())
     })?;
-    progress.finish_and_clear();
     Ok(counts)
 }
 
@@ -264,6 +317,21 @@ impl TokenStats {
 }
 
 impl Counts {
+    fn observe(&mut self, baseline: &Model, candidate: &Model, text: &str) -> Result<()> {
+        let before = self.baseline.observe(baseline, text)?;
+        let after = self.candidate.observe(candidate, text)?;
+        self.records += 1;
+        self.empty_records += u64::from(text.is_empty());
+        self.text_bytes += text.len() as u64;
+        self.text_codepoints += text.chars().count() as u64;
+        match after.cmp(&before) {
+            std::cmp::Ordering::Less => self.improved_records += 1,
+            std::cmp::Ordering::Equal => self.unchanged_records += 1,
+            std::cmp::Ordering::Greater => self.worsened_records += 1,
+        }
+        Ok(())
+    }
+
     fn add(&mut self, other: &Self) {
         self.text_codepoints += other.text_codepoints;
         self.records += other.records;

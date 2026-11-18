@@ -11,7 +11,7 @@ use thiserror::Error;
 use unicode_script::{Script, UnicodeScript};
 
 use crate::config::EffectiveConfig;
-use crate::progress::ProgressReporter;
+use crate::progress::{ProgressReporter, StageProgress};
 use crate::repair::{RepairSummary, ShardSummary};
 
 const IO_BUFFER_BYTES: usize = 1024 * 1024;
@@ -128,14 +128,31 @@ pub fn balance_corpus(
     let paths = BalancePaths::from_config(config);
     paths.create_dirs()?;
 
-    let stage = progress.stage(format!(
-        "balancing corpus: {} repaired line(s)",
-        repair.lines_written
-    ));
+    let bytes = repair
+        .shards
+        .iter()
+        .map(|shard| {
+            shard
+                .path
+                .metadata()
+                .map(|m| m.len())
+                .map_err(|source| BalanceError::Read {
+                    path: shard.path.clone(),
+                    source,
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let stage = progress.stage_bar(
+        format!(
+            "balancing corpus: {} repaired line(s)",
+            repair.lines_written
+        ),
+        bytes.iter().sum(),
+    );
     let summary = if config.balancing.enabled {
-        assemble_balanced(config, repair, &paths)?
+        assemble_balanced(config, repair, &paths, &stage, progress)?
     } else {
-        let buckets = copy_shards_to_training_parts(config, repair, &paths)?;
+        let buckets = copy_shards_to_training_parts(config, repair, &paths, &stage)?;
         let training_files = collect_training_files(&buckets);
         write_report(
             training_files,
@@ -157,6 +174,8 @@ fn assemble_balanced(
     config: &EffectiveConfig,
     repair: &RepairSummary,
     paths: &BalancePaths,
+    stage: &StageProgress,
+    progress: &ProgressReporter,
 ) -> Result<BalanceSummary, BalanceError> {
     let targets = compute_targets(config, repair);
     let mut buckets = Vec::new();
@@ -165,9 +184,9 @@ fn assemble_balanced(
         let Some(target) = targets.get(&shard.bucket).copied() else {
             continue;
         };
-        let lines = sample_shard(shard, target, config.balancing.shuffle_seed)?;
+        let lines = sample_shard(shard, target, config.balancing.shuffle_seed, stage)?;
         let output_lines = lines.len() as u64;
-        let training_files = write_training_parts(config, paths, &shard.bucket, lines)?;
+        let training_files = write_training_parts(config, paths, &shard.bucket, lines, progress)?;
         buckets.push(BucketBalance {
             bucket: shard.bucket.clone(),
             input_lines: shard.lines,
@@ -193,10 +212,11 @@ fn copy_shards_to_training_parts(
     config: &EffectiveConfig,
     repair: &RepairSummary,
     paths: &BalancePaths,
+    progress: &StageProgress,
 ) -> Result<Vec<BucketBalance>, BalanceError> {
     let mut buckets = Vec::new();
     for shard in &repair.shards {
-        let training_files = copy_training_parts(config, paths, shard)?;
+        let training_files = copy_training_parts(config, paths, shard, progress)?;
         buckets.push(BucketBalance {
             bucket: shard.bucket.clone(),
             input_lines: shard.lines,
@@ -213,6 +233,7 @@ fn copy_training_parts(
     config: &EffectiveConfig,
     paths: &BalancePaths,
     shard: &ShardSummary,
+    progress: &StageProgress,
 ) -> Result<Vec<PathBuf>, BalanceError> {
     let input = File::open(&shard.path).map_err(|source| BalanceError::Open {
         path: shard.path.clone(),
@@ -221,7 +242,7 @@ fn copy_training_parts(
     let mut files = Vec::new();
     let mut writer: Option<BufWriter<File>> = None;
     let limit = config.balancing.max_part_lines.max(1);
-    for (index, line) in BufReader::with_capacity(IO_BUFFER_BYTES, input)
+    for (index, line) in BufReader::with_capacity(IO_BUFFER_BYTES, progress.reader(input))
         .lines()
         .enumerate()
     {
@@ -353,7 +374,12 @@ fn rebalance_target_sum(
     }
 }
 
-fn sample_shard(shard: &ShardSummary, target: u64, seed: u64) -> Result<Vec<String>, BalanceError> {
+fn sample_shard(
+    shard: &ShardSummary,
+    target: u64,
+    seed: u64,
+    progress: &StageProgress,
+) -> Result<Vec<String>, BalanceError> {
     if target == 0 {
         return Ok(Vec::new());
     }
@@ -362,7 +388,7 @@ fn sample_shard(shard: &ShardSummary, target: u64, seed: u64) -> Result<Vec<Stri
         path: shard.path.clone(),
         source,
     })?;
-    let reader = BufReader::with_capacity(IO_BUFFER_BYTES, file);
+    let reader = BufReader::with_capacity(IO_BUFFER_BYTES, progress.reader(file));
     if shard.lines <= target {
         return reader
             .lines()
@@ -428,13 +454,20 @@ fn write_training_parts(
     paths: &BalancePaths,
     bucket: &BucketKey,
     mut lines: Vec<String>,
+    progress: &ProgressReporter,
 ) -> Result<Vec<PathBuf>, BalanceError> {
     if lines.is_empty() {
         return Ok(Vec::new());
     }
 
     let mut rng = ChaCha20Rng::seed_from_u64(config.balancing.shuffle_seed ^ bucket_seed(bucket));
+    let shuffle = progress.stage("shuffling selected training records");
     lines.shuffle(&mut rng);
+    shuffle.finish("training shard shuffled");
+    let writing = progress.stage_bar(
+        "writing balanced training parts",
+        lines.iter().map(|line| line.len() as u64 + 1).sum(),
+    );
 
     let max_part_lines = config.balancing.max_part_lines.max(1) as usize;
     let mut files = Vec::new();
@@ -444,19 +477,25 @@ fn write_training_parts(
             bucket_stem(bucket, NameFlavor::TrainingPart, part_index)
         );
         let path = paths.train_corpus_dir.join(file_name);
-        write_lines(&path, part_lines)?;
+        write_lines(&path, part_lines, &writing)?;
         files.push(path);
     }
+    writing.finish("balanced training parts written");
     Ok(files)
 }
 
-fn write_lines(path: &Path, lines: &[String]) -> Result<(), BalanceError> {
+fn write_lines(
+    path: &Path,
+    lines: &[String],
+    progress: &StageProgress,
+) -> Result<(), BalanceError> {
     create_parent_dir(path)?;
     let file = File::create(path).map_err(|source| BalanceError::Write {
         path: path.to_path_buf(),
         source,
     })?;
     let mut writer = BufWriter::with_capacity(IO_BUFFER_BYTES, file);
+    let mut pending = 0_u64;
     for line in lines {
         writer
             .write_all(line.as_bytes())
@@ -465,7 +504,13 @@ fn write_lines(path: &Path, lines: &[String]) -> Result<(), BalanceError> {
                 path: path.to_path_buf(),
                 source,
             })?;
+        pending += line.len() as u64 + 1;
+        if pending >= IO_BUFFER_BYTES as u64 {
+            progress.inc(pending);
+            pending = 0;
+        }
     }
+    progress.inc(pending);
     writer.flush().map_err(|source| BalanceError::Write {
         path: path.to_path_buf(),
         source,
@@ -767,7 +812,13 @@ mod tests {
             path: input,
             lines: 5,
         };
-        let files = copy_training_parts(&config, &paths, &shard).unwrap();
+        let files = copy_training_parts(
+            &config,
+            &paths,
+            &shard,
+            &ProgressReporter::silent().stage_bar("copy", 0),
+        )
+        .unwrap();
         assert_eq!(files.len(), 3);
         let output: String = files
             .iter()

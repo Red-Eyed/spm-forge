@@ -90,3 +90,51 @@ The unaugmented repetitive demo cannot fill an 8K vocabulary: native BPE explici
 the requested seed size. This is a workflow check, not natural-language compression evidence.
 The small Python-backed integration test also verifies automatic matched-size evaluation and
 Markdown generation. Natural-language quality, downstream accuracy, and latency remain unproven.
+
+
+## Parallel counting, progress, and resumable training
+
+The large-corpus run exposed four serial passes over the entire training partition, with
+encode/decode/normalization validation on every record. This optimization retains all four
+passes, all records, and every validation check. Bounded record batches feed independent
+worker-local integer counters through the existing safe SentencePiece binding. Reestimation,
+pruning, coverage protection, score arithmetic, and exported model format are unchanged.
+The Rust crate now forbids unsafe code; no custom FFI or native code was introduced.
+
+Each completed input file atomically publishes cumulative counts under a checksummed,
+versioned checkpoint key containing the verified corpus identity, ordered paths, exact model,
+semantic options, and phase. Thread count can change. A partial file is replayed after a kill;
+completed files/passes are reused. Model exports have atomic artifact writes and a completion
+marker. Compatible pre-checkpoint native BPE seeds can be adopted after checking their saved
+request, success status, vocabulary, and the current saved corpus. Native fits that did not
+finish restart that fit; evaluation restarts if interrupted and reuses completed matching
+reports. Discovery/fixing/balancing are skipped by train-only once the saved split exists.
+
+Byte progress covers copying, checksum construction/verification, each MinGram pass, and
+parallel held-out evaluation. Unknown-total stages retain spinners/status. Non-interactive
+logs receive periodic stderr counters; JSON stdout stays machine-readable. The normal
+workflow uses configured num_threads, while standalone counting/evaluation also expose
+--num-threads. Checksum verification still reads the full prepared corpus on resume.
+
+A local ARM64 macOS release comparison against the MinGram implementation in af8b4bd used
+7,998,440 bytes (ten repetitions of committed train.txt), 160,000 records, a shared existing
+9,421-piece BPE seed, an 8,192-piece output, and the same two hard-EM iterations. Two alternating
+runs took 2.395/2.410 seconds before (single-threaded), versus 0.958/0.718 seconds with eight
+threads. All four exported model files were byte-identical. A smaller control also produced
+identical one-thread and eight-thread outputs; one-thread time remained about unchanged.
+This measures local complete standalone optimization/export with cached storage, not HPC
+throughput, corpus preparation, downstream accuracy, or a guarantee of linear scaling.
+
+A separate full workflow used 128,000 synthetic input records, a 512-piece byte-fallback
+model, four threads, and 500-record prepared parts. SIGKILL after a two-file/1,000-record
+MinGram seed-count checkpoint was followed by train-only in the same work directory/prefix.
+It verified and reused preparation and the existing seed, completed the remaining passes,
+and produced a model byte-identical to an uninterrupted single-threaded run over the same
+prepared files and seed. Split/balance hashes and the seed's hash and modification time
+remained unchanged. A second resume reused completed model, baseline, and evaluation state.
+
+Regression checks cover exact sequential/parallel/resumed counts, scores, model bytes and
+paired metrics, bounded batches, byte fallback and unknown rejection, changed options/corpus
+identity, corrupt snapshots, incomplete checkpoint files, older seed adoption, and interrupted
+export recovery. These checks establish implementation equivalence on controlled data;
+large-corpus HPC speedups and downstream quality remain unmeasured.

@@ -1,5 +1,6 @@
 //! General-purpose tokenizer optimization and paired corpus evaluation.
 
+pub(crate) mod checkpoint;
 pub mod evaluate;
 pub mod mingram;
 pub mod model;

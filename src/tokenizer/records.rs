@@ -20,7 +20,7 @@ pub fn visit(
 ) -> Result<()> {
     ensure!(max_record_bytes > 0, "max_record_bytes must be positive");
     let file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
-    let mut reader = BufReader::new(file);
+    let mut reader = BufReader::with_capacity(1024 * 1024, file);
     let mut bytes = Vec::new();
     let mut line = 0_u64;
     loop {
@@ -49,4 +49,46 @@ pub fn visit(
             .with_context(|| format!("{}:{line}: invalid UTF-8", path.display()))?;
         consume(text, read as u64).with_context(|| format!("{}:{line}", path.display()))?;
     }
+}
+
+pub const BATCH_RECORDS: usize = 4096;
+pub const BATCH_BYTES: usize = 4 * 1024 * 1024;
+
+pub struct Batch {
+    pub records: Vec<String>,
+    pub bytes: u64,
+    pub first_line: u64,
+}
+
+/// Retains at most one batch plus one size-limited record, independent of corpus size.
+pub fn batches(
+    path: &Path,
+    max_record_bytes: usize,
+    cancellation: &CancellationToken,
+    mut consume: impl FnMut(Batch) -> Result<()>,
+) -> Result<()> {
+    let mut batch = Batch {
+        records: Vec::new(),
+        bytes: 0,
+        first_line: 1,
+    };
+    let mut line = 0;
+    visit(path, max_record_bytes, cancellation, |text, bytes| {
+        line += 1;
+        batch.records.push(text.to_owned());
+        batch.bytes += bytes;
+        if batch.records.len() >= BATCH_RECORDS || batch.bytes >= BATCH_BYTES as u64 {
+            let next = Batch {
+                records: Vec::new(),
+                bytes: 0,
+                first_line: line + 1,
+            };
+            consume(std::mem::replace(&mut batch, next))?;
+        }
+        Ok(())
+    })?;
+    if !batch.records.is_empty() {
+        consume(batch)?;
+    }
+    Ok(())
 }
