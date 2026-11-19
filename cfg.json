@@ -1,11 +1,15 @@
 {
-  "preset": "ocr_multilingual",
+  "preset": "multilingual_mingram",
   "num_threads": 16,
   "corpus": {
     "path": "data/raw-corpus"
   },
   "output": {
-    "work_dir": "runs/ocr-spm-v1",
-    "model_prefix": "ocr_tokenizer"
+    "work_dir": "runs/mingram",
+    "model_prefix": "tokenizer"
+  },
+  "evaluation": {
+    "test_fraction": 0.05,
+    "split_seed": 42
   }
 }

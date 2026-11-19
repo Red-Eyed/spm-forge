@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -12,6 +12,7 @@ use crate::config::{self, EffectiveConfig};
 use crate::corpus::{self, DiscoveredCorpus};
 use crate::progress::ProgressReporter;
 use crate::repair::{self, RepairSummary};
+use crate::tokenizer::{evaluate, mingram, model::Model, records::DEFAULT_MAX_RECORD_BYTES};
 use crate::trainer::{self, TrainerOutput};
 
 #[derive(Debug, Parser)]
@@ -26,13 +27,56 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     Train(TrainArgs),
+    Evaluate(EvaluateArgs),
+    Mingram(MingramArgs),
+}
+
+#[derive(Debug, Args)]
+struct MingramArgs {
+    /// Existing BPE/Unigram candidate model; otherwise generate a BPE seed using --config.
+    #[arg(long)]
+    seed_model: Option<PathBuf>,
+    #[arg(long, required = true, num_args = 1..)]
+    input: Vec<PathBuf>,
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(long, default_value_t = 8192)]
+    vocab_size: usize,
+    #[arg(long, default_value_t = 2)]
+    iterations: usize,
+    #[arg(long, default_value_t = DEFAULT_MAX_RECORD_BYTES)]
+    max_record_bytes: usize,
+    #[arg(long, default_value = "cfg.json")]
+    config: PathBuf,
+    #[arg(long, default_value = "cfg.presets.json")]
+    preset_config: PathBuf,
+    #[arg(long, default_value_t = default_threads())]
+    num_threads: usize,
+    #[arg(long)]
+    quiet: bool,
+}
+
+#[derive(Debug, Args)]
+struct EvaluateArgs {
+    #[arg(long)]
+    baseline: PathBuf,
+    #[arg(long)]
+    candidate: PathBuf,
+    #[arg(long, required = true, num_args = 1..)]
+    input: Vec<PathBuf>,
+    #[arg(long, default_value_t = DEFAULT_MAX_RECORD_BYTES)]
+    max_record_bytes: usize,
+    #[arg(long, default_value_t = default_threads())]
+    num_threads: usize,
+    #[arg(long)]
+    quiet: bool,
 }
 
 #[derive(Debug, Args)]
 struct TrainArgs {
     #[arg(long, default_value = "cfg.json")]
     config: PathBuf,
-    #[arg(long, default_value = "cfg.json.ocr")]
+    #[arg(long, default_value = "cfg.presets.json")]
     preset_config: PathBuf,
     #[arg(long)]
     train_only: bool,
@@ -56,6 +100,9 @@ struct TrainSummary {
     model: PathBuf,
     vocab: PathBuf,
     trainer_output: PathBuf,
+    report_md: PathBuf,
+    report_json: PathBuf,
+    split_report: PathBuf,
     work_dir: PathBuf,
     model_prefix: String,
 }
@@ -69,8 +116,15 @@ struct TrainOnlySummary {
     model: PathBuf,
     vocab: PathBuf,
     trainer_output: PathBuf,
+    report_md: PathBuf,
+    report_json: PathBuf,
+    split_report: PathBuf,
     work_dir: PathBuf,
     model_prefix: String,
+}
+
+fn default_threads() -> usize {
+    std::thread::available_parallelism().map_or(1, usize::from)
 }
 
 pub fn run() -> Result<()> {
@@ -80,7 +134,168 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Command::Train(args) => train(args, cli.json, &cancellation),
+        Command::Evaluate(args) => evaluate_models(args, cli.json, &cancellation),
+        Command::Mingram(args) => train_mingram(args, cli.json, &cancellation),
     }
+}
+
+fn train_mingram(
+    args: MingramArgs,
+    json_output: bool,
+    cancellation: &CancellationToken,
+) -> Result<()> {
+    ensure!(
+        args.output.extension().is_some_and(|ext| ext == "model"),
+        "output must end in .model"
+    );
+    ensure!(
+        args.vocab_size > 0 && args.iterations > 0 && args.max_record_bytes > 0,
+        "vocabulary size, iterations, and max_record_bytes must be positive"
+    );
+    for path in [
+        &args.output,
+        &args.output.with_extension("vocab"),
+        &args.output.with_extension("mingram.json"),
+    ] {
+        ensure!(!path.exists(), "refusing to overwrite {}", path.display());
+    }
+    let seed_path = prepare_mingram_seed(&args, json_output, cancellation)?;
+    let seed = Model::load(&seed_path)?;
+    let options = mingram::Options {
+        vocab_size: args.vocab_size,
+        iterations: args.iterations,
+        max_record_bytes: args.max_record_bytes,
+        quiet: args.quiet,
+    };
+    let progress = if args.quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(json_output)
+    };
+    let trained = if args.num_threads == 1 {
+        mingram::train(&seed, &args.input, &options, cancellation)?
+    } else {
+        let runtime = mingram::Runtime::new(args.num_threads, &progress, None)?;
+        mingram::train_with_runtime(&seed, &args.input, &options, &runtime, cancellation)?
+    };
+    cancellation.check()?;
+    mingram::save(&trained, &args.output)?;
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&trained.report)?);
+    } else {
+        println!(
+            "MinGram: {} → {} pieces; output {}",
+            trained.report.seed_vocab_size,
+            trained.report.output_vocab_size,
+            args.output.display()
+        );
+        for pass in &trained.report.passes {
+            println!(
+                "  {}: {} records, {} tokens, {} used pieces",
+                pass.phase, pass.records, pass.tokens, pass.used_pieces
+            );
+        }
+    }
+    Ok(())
+}
+
+fn prepare_mingram_seed(
+    args: &MingramArgs,
+    json_output: bool,
+    cancellation: &CancellationToken,
+) -> Result<PathBuf> {
+    if let Some(path) = &args.seed_model {
+        return Ok(path.clone());
+    }
+    ensure!(!args.output.with_extension("seed").exists(),
+        "seed directory already exists; supply --seed-model to reuse it or choose a new output path");
+    let mut config = config::load_effective_config(&args.config, &args.preset_config)?;
+    let size = args
+        .vocab_size
+        .checked_mul(115)
+        .context("seed vocabulary size overflow")?
+        .div_ceil(100);
+    config.sentencepiece.vocab_size = u32::try_from(size)?;
+    config.sentencepiece.algorithm = config::TrainingAlgorithm::Bpe;
+    config.output.work_dir = args.output.with_extension("seed");
+    config.output.model_prefix = "seed".to_owned();
+    let progress = if args.quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(json_output)
+    };
+    // Seed training uses the supplied records directly, bypassing OCR repair and balancing.
+    let output = trainer::train_sentencepiece(&config, &args.input, &progress, cancellation)?;
+    Ok(output.model)
+}
+
+fn evaluate_models(
+    args: EvaluateArgs,
+    json_output: bool,
+    cancellation: &CancellationToken,
+) -> Result<()> {
+    let baseline = Model::load(&args.baseline)?;
+    let candidate = Model::load(&args.candidate)?;
+    let progress = if args.quiet {
+        ProgressReporter::silent()
+    } else {
+        ProgressReporter::new(json_output)
+    };
+    let report = if args.num_threads == 1 {
+        evaluate::compare(
+            &baseline,
+            &candidate,
+            &args.input,
+            args.max_record_bytes,
+            args.quiet,
+            cancellation,
+        )?
+    } else {
+        evaluate::compare_with_options(
+            &baseline,
+            &candidate,
+            &args.input,
+            &evaluate::Options {
+                max_record_bytes: args.max_record_bytes,
+                threads: args.num_threads,
+                progress: &progress,
+            },
+            cancellation,
+        )?
+    };
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!(
+            "Vocabulary: baseline {}, candidate {}",
+            report.baseline_vocab_size, report.candidate_vocab_size
+        );
+        for file in &report.files {
+            print_metrics(&file.input.display().to_string(), &file.metrics);
+        }
+        print_metrics("Total", &report.total);
+    }
+    Ok(())
+}
+
+fn print_metrics(label: &str, metrics: &evaluate::Metrics) {
+    println!(
+        "{label}: {} records, {} → {} tokens",
+        metrics.counts.records, metrics.counts.baseline.tokens, metrics.counts.candidate.tokens
+    );
+    match metrics.percent_tokens_saved {
+        evaluate::Ratio::Defined { value } => println!("  Tokens saved: {value:.3}%"),
+        evaluate::Ratio::Undefined { reason } => println!("  Tokens saved: undefined ({reason})"),
+    }
+    println!(
+        "  Records: {} improved, {} unchanged, {} worsened",
+        metrics.counts.improved_records,
+        metrics.counts.unchanged_records,
+        metrics.counts.worsened_records
+    );
+    println!("  Raw round-trip failures: baseline {}, candidate {}; normalized failures: baseline {}, candidate {}",
+        metrics.counts.baseline.raw_round_trip_failures, metrics.counts.candidate.raw_round_trip_failures,
+        metrics.counts.baseline.normalized_round_trip_failures, metrics.counts.candidate.normalized_round_trip_failures);
 }
 
 fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -> Result<()> {
@@ -93,6 +308,10 @@ fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -
         return train_from_existing_corpus(&config, &progress, cancellation, json_output);
     }
 
+    ensure!(
+        !config.output.work_dir.join("reports/split.json").exists(),
+        "prepared split already exists; use --train-only with a fresh model_prefix, or choose a new work_dir"
+    );
     let corpus = discover_corpus(&config, &progress)?;
     cancellation.check()?;
     let repair = repair_corpus(&config, &corpus, &progress, cancellation)?;
@@ -105,8 +324,11 @@ fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -
     }
     cancellation.check()?;
     let balance = balance_corpus(&config, &repair, &progress)?;
+    let split = save_split(&config, &repair, &balance, &progress, cancellation)?;
     cancellation.check()?;
-    let trainer = train_sentencepiece(&config, &balance, &progress, cancellation)?;
+    let trainer =
+        crate::training_workflow::train_and_report(&config, &split, &progress, cancellation)
+            .context("could not train SentencePiece")?;
     let summary = TrainSummary::from_outputs(&config, &corpus, &repair, &balance, &trainer);
 
     if json_output {
@@ -129,6 +351,7 @@ fn train(args: TrainArgs, json_output: bool, cancellation: &CancellationToken) -
             source_issue_suffix,
             summary.model.display()
         );
+        println!("Report: {}", summary.report_md.display());
     }
 
     Ok(())
@@ -155,6 +378,7 @@ fn train_from_existing_corpus(
             summary.balanced_lines,
             summary.model.display()
         );
+        println!("Report: {}", summary.report_md.display());
     }
 
     Ok(())
@@ -265,8 +489,52 @@ fn train_sentencepiece(
     progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<TrainerOutput> {
-    trainer::train_sentencepiece(config, &balance.training_files, progress, cancellation)
+    let split = crate::corpus_split::SplitManifest::load(
+        &config.output.work_dir.join("reports/split.json"),
+        &config.evaluation,
+        &preparation_hash(config)?,
+        progress,
+        cancellation,
+    )?;
+    ensure!(
+        split.train_paths() == balance.training_files,
+        "training file list differs from the saved split"
+    );
+    crate::training_workflow::train_and_report(config, &split, progress, cancellation)
         .context("could not train SentencePiece")
+}
+
+fn preparation_hash(config: &EffectiveConfig) -> Result<String> {
+    let bytes = serde_json::to_vec(&(
+        &config.canonicalization,
+        &config.balancing,
+        config.sentencepiece.max_sentence_length,
+    ))?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
+fn save_split(
+    config: &EffectiveConfig,
+    repair: &RepairSummary,
+    balance: &BalanceSummary,
+    progress: &ProgressReporter,
+    cancellation: &CancellationToken,
+) -> Result<crate::corpus_split::SplitManifest> {
+    let tests: Vec<_> = repair.test_shards.iter().map(|s| s.path.clone()).collect();
+    let split = crate::corpus_split::SplitManifest::create(
+        &balance.training_files,
+        &tests,
+        config.evaluation.clone(),
+        preparation_hash(config)?,
+        crate::corpus_split::SourceRecords {
+            training: repair.training_records,
+            test: repair.test_records,
+        },
+        progress,
+        cancellation,
+    )?;
+    split.save(&config.output.work_dir.join("reports/split.json"))?;
+    Ok(split)
 }
 
 impl TrainSummary {
@@ -294,6 +562,9 @@ impl TrainSummary {
             model: trainer.model.clone(),
             vocab: trainer.vocab.clone(),
             trainer_output: config.output.work_dir.join("trainer_output.json"),
+            report_md: config.output.work_dir.join("reports/tokenizer.md"),
+            report_json: config.output.work_dir.join("reports/tokenizer.json"),
+            split_report: config.output.work_dir.join("reports/split.json"),
             work_dir: config.output.work_dir.clone(),
             model_prefix: config.output.model_prefix.clone(),
         }
@@ -314,6 +585,9 @@ impl TrainOnlySummary {
             model: trainer.model.clone(),
             vocab: trainer.vocab.clone(),
             trainer_output: config.output.work_dir.join("trainer_output.json"),
+            report_md: config.output.work_dir.join("reports/tokenizer.md"),
+            report_json: config.output.work_dir.join("reports/tokenizer.json"),
+            split_report: config.output.work_dir.join("reports/split.json"),
             work_dir: config.output.work_dir.clone(),
             model_prefix: config.output.model_prefix.clone(),
         }
@@ -327,11 +601,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parses_existing_seed_mingram_without_ocr_config() {
+        let cli = Cli::try_parse_from([
+            "spm-ocr",
+            "mingram",
+            "--seed-model",
+            "seed.model",
+            "--input",
+            "train.txt",
+            "--output",
+            "out.model",
+            "--quiet",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Mingram(args) => {
+                assert_eq!(args.seed_model, Some(PathBuf::from("seed.model")));
+                assert_eq!(args.vocab_size, 8192);
+                assert_eq!(args.iterations, 2);
+                assert!(args.quiet);
+            }
+            other => panic!("expected mingram, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_json_paired_evaluation_with_multiple_files() {
+        let cli = Cli::try_parse_from([
+            "spm-ocr",
+            "--json",
+            "evaluate",
+            "--baseline",
+            "a.model",
+            "--candidate",
+            "b.model",
+            "--input",
+            "one.txt",
+            "two.txt",
+        ])
+        .unwrap();
+        assert!(cli.json);
+        match cli.command {
+            Command::Evaluate(args) => assert_eq!(args.input.len(), 2),
+            other => panic!("expected evaluate, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn parses_train_only_flag() {
         let cli = Cli::try_parse_from(["spm-ocr", "train", "--train-only"]).expect("parse cli");
 
         match cli.command {
             Command::Train(args) => assert!(args.train_only),
+            other => panic!("expected train, got {other:?}"),
         }
     }
 

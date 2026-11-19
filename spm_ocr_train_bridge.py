@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 import sys
 import time
-from pathlib import Path
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Annotated, Literal, NotRequired, Self, TypedDict
 
 import sentencepiece as spm

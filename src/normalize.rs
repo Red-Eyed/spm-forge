@@ -31,7 +31,7 @@ fn is_already_canonical(input: &str, config: &CanonicalizationConfig) -> bool {
 fn needs_configured_mapping(input: &str, config: &CanonicalizationConfig) -> bool {
     input.chars().any(|character| {
         should_strip(character, config)
-            || character == '\u{00ad}'
+            || character == '\u{00ad}' && config.soft_hyphen != SoftHyphenPolicy::Preserve
             || character == '\u{00a0}' && config.map_nbsp_to_space
             || is_arabic_presentation_form(character) && config.fold_arabic_presentation_forms
     })
@@ -76,6 +76,7 @@ fn should_strip(character: char, config: &CanonicalizationConfig) -> bool {
 
 fn apply_soft_hyphen(output: &mut String, is_line_final: bool, policy: SoftHyphenPolicy) {
     match policy {
+        SoftHyphenPolicy::Preserve => output.push('\u{00ad}'),
         SoftHyphenPolicy::LineFinalToHyphenMidlineStrip => {
             if is_line_final {
                 output.push('-');
@@ -117,6 +118,19 @@ mod tests {
             preserve_zwj_zwnj: true,
             preserve_compatibility_chars: true,
         }
+    }
+
+    #[test]
+    fn multilingual_defaults_only_apply_canonical_normalization() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let config = crate::config::load_effective_config(
+            &root.join("cfg.json"),
+            &root.join("cfg.presets.json"),
+        )
+        .unwrap();
+        let input = "cafe\u{0301}\u{00ad}\u{00a0}\u{200b}\u{200d}ﻻ①";
+        let output = canonicalize_line(input, &config.canonicalization);
+        assert_eq!(output.text, "café\u{00ad}\u{00a0}\u{200b}\u{200d}ﻻ①");
     }
 
     #[test]

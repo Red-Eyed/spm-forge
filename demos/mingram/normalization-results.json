@@ -1,0 +1,1593 @@
+{
+  "unicode_database_version": "16.0.0",
+  "results": [
+    {
+      "form": "NFC",
+      "max_piece_length": 16,
+      "corpus": {
+        "training_alphabet_size": 240,
+        "changed_heldout_records": 0,
+        "heldout_codepoints": 84665
+      },
+      "bpe": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 316,
+                "unchanged_records": 84,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5376,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4040,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 255,
+                "unchanged_records": 145,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3166,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 252,
+                "unchanged_records": 148,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5159,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4306,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 194,
+                "unchanged_records": 206,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6061,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5474,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 366,
+                "unchanged_records": 34,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5925,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4316,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 249,
+                "unchanged_records": 151,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3676,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3182,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 344,
+                "unchanged_records": 56,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 4630,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3168,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 316,
+                "unchanged_records": 84,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5213,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4189,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2292,
+            "unchanged_records": 908,
+            "worsened_records": 0,
+            "baseline": {
+              "tokens": 39206,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 31429,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      },
+      "unigram": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7741,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4040,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 6,
+                "unchanged_records": 0,
+                "worsened_records": 394,
+                "baseline": {
+                  "tokens": 1636,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 9535,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4306,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 399,
+                "unchanged_records": 1,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 8963,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5474,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 10585,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4316,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 272,
+                "unchanged_records": 5,
+                "worsened_records": 123,
+                "baseline": {
+                  "tokens": 3931,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3182,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6094,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3168,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit16/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7859,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4189,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2677,
+            "unchanged_records": 6,
+            "worsened_records": 517,
+            "baseline": {
+              "tokens": 56344,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 31429,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "form": "NFD",
+      "max_piece_length": 16,
+      "corpus": {
+        "training_alphabet_size": 227,
+        "changed_heldout_records": 1098,
+        "heldout_codepoints": 93095
+      },
+      "bpe": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 347,
+                "unchanged_records": 53,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5699,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4093,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 255,
+                "unchanged_records": 145,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3166,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 285,
+                "unchanged_records": 115,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5517,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4600,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 225,
+                "unchanged_records": 175,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6167,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5527,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 189,
+                "unchanged_records": 211,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6243,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5279,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 164,
+                "unchanged_records": 236,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3725,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3437,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 323,
+                "unchanged_records": 77,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6463,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4586,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 320,
+                "unchanged_records": 80,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5402,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4521,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2108,
+            "unchanged_records": 1092,
+            "worsened_records": 0,
+            "baseline": {
+              "tokens": 42382,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 34797,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      },
+      "unigram": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7704,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4093,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 6,
+                "unchanged_records": 0,
+                "worsened_records": 394,
+                "baseline": {
+                  "tokens": 1636,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 9491,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4600,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 399,
+                "unchanged_records": 1,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 9016,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5527,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 10585,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5279,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 247,
+                "unchanged_records": 9,
+                "worsened_records": 144,
+                "baseline": {
+                  "tokens": 3941,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3437,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 10976,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4586,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit16/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7859,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4521,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2652,
+            "unchanged_records": 10,
+            "worsened_records": 538,
+            "baseline": {
+              "tokens": 61208,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 34797,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "form": "NFC",
+      "max_piece_length": 64,
+      "corpus": {
+        "training_alphabet_size": 240,
+        "changed_heldout_records": 0,
+        "heldout_codepoints": 84665
+      },
+      "bpe": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 316,
+                "unchanged_records": 84,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5376,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4040,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 255,
+                "unchanged_records": 145,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3166,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 252,
+                "unchanged_records": 148,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5159,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4306,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 194,
+                "unchanged_records": 206,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6061,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5474,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 366,
+                "unchanged_records": 34,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5925,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4316,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 249,
+                "unchanged_records": 151,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3676,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3182,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 344,
+                "unchanged_records": 56,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 4630,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3168,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 316,
+                "unchanged_records": 84,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5213,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4189,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2292,
+            "unchanged_records": 908,
+            "worsened_records": 0,
+            "baseline": {
+              "tokens": 39206,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 31429,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      },
+      "unigram": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7741,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4040,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 6,
+                "unchanged_records": 0,
+                "worsened_records": 394,
+                "baseline": {
+                  "tokens": 1636,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 9535,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4306,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 399,
+                "unchanged_records": 1,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 8963,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5474,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 10585,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4316,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 272,
+                "unchanged_records": 5,
+                "worsened_records": 123,
+                "baseline": {
+                  "tokens": 3931,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3182,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6094,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3168,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFC-limit64/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7859,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4189,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2677,
+            "unchanged_records": 6,
+            "worsened_records": 517,
+            "baseline": {
+              "tokens": 56344,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 31429,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "form": "NFD",
+      "max_piece_length": 64,
+      "corpus": {
+        "training_alphabet_size": 227,
+        "changed_heldout_records": 1098,
+        "heldout_codepoints": 93095
+      },
+      "bpe": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 347,
+                "unchanged_records": 53,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5699,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4093,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 255,
+                "unchanged_records": 145,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3166,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 285,
+                "unchanged_records": 115,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5517,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4600,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 225,
+                "unchanged_records": 175,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6167,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5527,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 189,
+                "unchanged_records": 211,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6243,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5279,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 164,
+                "unchanged_records": 236,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 3725,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3437,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 323,
+                "unchanged_records": 77,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 6463,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4586,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 320,
+                "unchanged_records": 80,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 5402,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4521,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2108,
+            "unchanged_records": 1092,
+            "worsened_records": 0,
+            "baseline": {
+              "tokens": 42382,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 34797,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      },
+      "unigram": {
+        "baseline_vocab_size": 512,
+        "candidate_vocab_size": 512,
+        "same_vocab_size": true,
+        "normalization_matches": true,
+        "files": [
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-arabic.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7704,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4093,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-chinese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 6,
+                "unchanged_records": 0,
+                "worsened_records": 394,
+                "baseline": {
+                  "tokens": 1636,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 2754,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-english.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 9491,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4600,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-french.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 399,
+                "unchanged_records": 1,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 9016,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5527,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-hindi.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 10585,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 5279,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-japanese.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 247,
+                "unchanged_records": 9,
+                "worsened_records": 144,
+                "baseline": {
+                  "tokens": 3941,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 3437,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-korean.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 10976,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4586,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          },
+          {
+            "input": "target/mingram-normalization/run-ll3kk7mf/NFD-limit64/data/heldout-thai.txt",
+            "metrics": {
+              "counts": {
+                "records": 400,
+                "improved_records": 400,
+                "unchanged_records": 0,
+                "worsened_records": 0,
+                "baseline": {
+                  "tokens": 7859,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                },
+                "candidate": {
+                  "tokens": 4521,
+                  "unknown_tokens": 0,
+                  "raw_round_trip_failures": 0
+                }
+              }
+            }
+          }
+        ],
+        "total": {
+          "counts": {
+            "records": 3200,
+            "improved_records": 2652,
+            "unchanged_records": 10,
+            "worsened_records": 538,
+            "baseline": {
+              "tokens": 61208,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            },
+            "candidate": {
+              "tokens": 34797,
+              "unknown_tokens": 0,
+              "raw_round_trip_failures": 0
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,4 +1,5 @@
-use std::sync::Mutex;
+use std::io::{IsTerminal, Read};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use indicatif::{ProgressBar, ProgressStyle};
@@ -9,16 +10,30 @@ const PLAIN_STATUS_INTERVAL: Duration = Duration::from_secs(10);
 
 pub struct ProgressReporter {
     json_output: bool,
+    quiet: bool,
 }
 
 impl ProgressReporter {
     pub fn new(json_output: bool) -> Self {
-        Self { json_output }
+        Self {
+            json_output,
+            quiet: false,
+        }
+    }
+
+    pub fn silent() -> Self {
+        Self {
+            json_output: false,
+            quiet: true,
+        }
     }
 
     pub fn stage(&self, message: impl Into<String>) -> StageProgress {
+        if self.quiet {
+            return StageProgress::interactive(ProgressBar::hidden());
+        }
         let message = message.into();
-        if self.json_output {
+        if self.json_output || !std::io::stderr().is_terminal() {
             eprintln!("{message}");
             return StageProgress::plain(message);
         }
@@ -34,10 +49,15 @@ impl ProgressReporter {
     }
 
     pub fn stage_bar(&self, message: impl Into<String>, total: u64) -> StageProgress {
+        if self.quiet {
+            return StageProgress::interactive(ProgressBar::hidden());
+        }
         let message = message.into();
-        if self.json_output {
+        if self.json_output || !std::io::stderr().is_terminal() {
             eprintln!("{message}");
-            return StageProgress::plain(message);
+            let stage = StageProgress::plain(message);
+            stage.bar.set_length(total);
+            return stage;
         }
 
         let bar = ProgressBar::new(total);
@@ -46,6 +66,7 @@ impl ProgressReporter {
                 .expect("bar progress template is static")
                 .progress_chars("=> "),
         );
+        bar.enable_steady_tick(Duration::from_millis(250));
         bar.set_message(message);
         StageProgress::interactive(bar)
     }
@@ -54,7 +75,8 @@ impl ProgressReporter {
 pub struct StageProgress {
     bar: ProgressBar,
     plain_output: bool,
-    last_plain_emit: Mutex<Option<Instant>>,
+    started: Instant,
+    last_plain_emit_seconds: AtomicU64,
 }
 
 impl StageProgress {
@@ -62,16 +84,17 @@ impl StageProgress {
         Self {
             bar,
             plain_output: false,
-            last_plain_emit: Mutex::new(None),
+            started: Instant::now(),
+            last_plain_emit_seconds: AtomicU64::new(0),
         }
     }
 
     fn plain(initial_message: String) -> Self {
-        let now = Instant::now();
         Self {
             bar: ProgressBar::hidden(),
             plain_output: true,
-            last_plain_emit: Mutex::new(Some(now)),
+            started: Instant::now(),
+            last_plain_emit_seconds: AtomicU64::new(0),
         }
         .with_initial_message(initial_message)
     }
@@ -91,6 +114,23 @@ impl StageProgress {
 
     pub fn inc(&self, delta: u64) {
         self.bar.inc(delta);
+        if self.plain_output
+            && self
+                .started
+                .elapsed()
+                .as_secs()
+                .saturating_sub(self.last_plain_emit_seconds.load(Ordering::Relaxed))
+                >= PLAIN_STATUS_INTERVAL.as_secs()
+        {
+            self.emit_plain_status(self.bar.message().to_string());
+        }
+    }
+
+    pub fn reader<R: Read>(&self, inner: R) -> ProgressReader<'_, R> {
+        ProgressReader {
+            inner,
+            progress: self,
+        }
     }
 
     pub fn finish(self, message: impl Into<String>) {
@@ -106,20 +146,42 @@ impl StageProgress {
             return;
         }
 
-        let now = Instant::now();
-        let mut last_emit = self
-            .last_plain_emit
-            .lock()
-            .expect("plain progress status lock should not be poisoned");
-        if last_emit
-            .as_ref()
-            .is_some_and(|last| now.duration_since(*last) < PLAIN_STATUS_INTERVAL)
+        let seconds = self.started.elapsed().as_secs();
+        let last = self.last_plain_emit_seconds.load(Ordering::Relaxed);
+        if seconds.saturating_sub(last) < PLAIN_STATUS_INTERVAL.as_secs() {
+            return;
+        }
+        if self
+            .last_plain_emit_seconds
+            .compare_exchange(last, seconds, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
         {
             return;
         }
+        if let Some(total) = self.bar.length() {
+            let position = self.bar.position();
+            let percent = if total == 0 {
+                100.0
+            } else {
+                100.0 * position as f64 / total as f64
+            };
+            eprintln!("{message}: {position}/{total} bytes ({percent:.1}%), {seconds}s elapsed");
+        } else {
+            eprintln!("{message}: {seconds}s elapsed");
+        }
+    }
+}
 
-        eprintln!("{message}");
-        *last_emit = Some(now);
+pub struct ProgressReader<'a, R> {
+    inner: R,
+    progress: &'a StageProgress,
+}
+
+impl<R: Read> Read for ProgressReader<'_, R> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        let bytes = self.inner.read(buffer)?;
+        self.progress.inc(bytes as u64);
+        Ok(bytes)
     }
 }
 

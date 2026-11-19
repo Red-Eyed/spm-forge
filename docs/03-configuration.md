@@ -1,5 +1,56 @@
 # Recommended configuration
 
+## Default multilingual profile
+
+`cfg.json` selects `multilingual_mingram`: 8192 total pieces, 256 byte-fallback pieces,
+NFC corpus preparation, identity model normalization, no user-defined symbols, no language
+weights, and no corpus balancing. Seed pieces are capped at 16 Unicode code points.
+`split_digits` is false. `character_coverage` is 0.9995; an alphabet that exceeds the protected
+budget causes an explicit error. Native BPE input sampling is capped at 1,000,000 records.
+
+Preparation preserves soft hyphens, NBSP, zero-width spaces, joiners, compatibility characters,
+and Arabic presentation forms. NFC can change canonically equivalent sequences. Other presets
+retain their OCR-specific mapping policies.
+
+`evaluation.test_fraction` defaults to 0.05 and must be strictly between 0 and 1;
+`evaluation.split_seed` defaults to 42. Content hashing assigns canonical original records
+before chunking. Balancing, BPE seed training, MinGram, and the equal-size BPE baseline consume
+training files only. The saved split and checksums are reused by `train-only`; a changed split
+or preparation config requires a fresh preparation run. `train-only` with the same model
+prefix resumes compatible work; choose a fresh prefix for a separate tokenizer fit.
+
+Training writes `reports/tokenizer.md` and `reports/tokenizer.json` automatically, with
+compression, distribution, coverage, reconstruction, and per-shard results. Byte tokens are
+counted individually. This adds a BPE baseline fit for MinGram; BPE configurations evaluate
+against themselves. See the [usage and interpretation guide](../README.md#held-out-evaluation).
+
+## MinGram in cfg.json
+
+Set `sentencepiece.model_type` to `"mingram"` to use the Rust optimizer through the normal
+`just train` or `just train-only` workflow. `sentencepiece.vocab_size` is the final vocabulary
+budget, including protected characters and reserved pieces. Optional
+`sentencepiece.mingram.iterations` is a positive integer, defaulting to 2.
+
+See [cfg.mingram.json](../cfg.mingram.json) for a complete example. The configured Python
+runner generates a BPE seed at `ceil(1.15 * final_vocab_size)`. It also trains the equal-budget BPE baseline after MinGram. Other
+SentencePiece options apply to both native training runs, and its normalization and coverage are retained
+in the final model. No language weights are introduced. Corpus repair and any explicitly
+enabled balancing still belong to the existing preparation pipeline.
+
+The final model, vocabulary, MinGram report/ID mapping, and `trainer_output.json` are written
+under the configured work directory. BPE seed requests and outputs are retained under
+`<model_prefix>.seed/`. The top-level MinGram `trainer_request.json` records optimizer inputs;
+it is not a request for direct replay by the Python bridge. `<model_prefix>.checkpoints/`
+contains versioned, checksummed file-boundary counts and artifact completion markers. Resume
+validates corpus/model/config provenance, adopts compatible older completed BPE seeds, and
+repeats only the interrupted MinGram file. Existing untracked model artifacts are not
+overwritten. `num_threads` controls MinGram and paired evaluation as well as repair and native
+training; it may change on resume. No record sampling or reconstruction checks are removed.
+See [resume behavior](../README.md#usage) for stage boundaries and limitations.
+MinGram-specific options with `model_type: "bpe"` are rejected.
+
+## Existing BPE preset
+
 ```python
 import sentencepiece as spm
 

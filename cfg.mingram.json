@@ -1,0 +1,25 @@
+{
+  "preset": "multilingual_mingram",
+  "num_threads": 16,
+  "corpus": {
+    "path": "data/raw-corpus"
+  },
+  "output": {
+    "work_dir": "runs/mingram",
+    "model_prefix": "tokenizer"
+  },
+  "balancing": {
+    "enabled": false
+  },
+  "sentencepiece": {
+    "model_type": "mingram",
+    "vocab_size": 8192,
+    "mingram": {
+      "iterations": 2
+    }
+  },
+  "evaluation": {
+    "test_fraction": 0.05,
+    "split_seed": 42
+  }
+}

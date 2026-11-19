@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,8 @@ pub enum ConfigError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RawConfig {
+    #[serde(default)]
+    pub evaluation: EvaluationConfig,
     #[serde(default)]
     pub preset: Option<String>,
     #[serde(default)]
@@ -92,6 +95,7 @@ pub struct PresetConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct EffectiveConfig {
+    pub evaluation: EvaluationConfig,
     pub preset: String,
     pub num_threads: u32,
     pub corpus: CorpusConfig,
@@ -149,7 +153,24 @@ pub enum StripRule {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SoftHyphenPolicy {
+    Preserve,
     LineFinalToHyphenMidlineStrip,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct EvaluationConfig {
+    pub test_fraction: f64,
+    pub split_seed: u64,
+}
+
+impl Default for EvaluationConfig {
+    fn default() -> Self {
+        Self {
+            test_fraction: 0.05,
+            split_seed: 42,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -209,11 +230,11 @@ pub enum BalanceAxis {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct SentencePieceConfig {
     pub trainer: TrainerKind,
     pub python: PythonTrainerConfig,
-    pub model_type: ModelType,
+    #[serde(flatten)]
+    pub algorithm: TrainingAlgorithm,
     pub vocab_size: u32,
     pub character_coverage: f64,
     pub byte_fallback: bool,
@@ -240,6 +261,8 @@ pub struct PartialSentencePieceConfig {
     pub python: Option<PythonTrainerConfig>,
     #[serde(default)]
     pub model_type: Option<ModelType>,
+    #[serde(default)]
+    pub mingram: Option<MingramConfig>,
     #[serde(default)]
     pub vocab_size: Option<u32>,
     #[serde(default)]
@@ -290,6 +313,33 @@ pub struct PythonTrainerConfig {
 #[serde(rename_all = "snake_case")]
 pub enum ModelType {
     Bpe,
+    Mingram,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "model_type", rename_all = "snake_case")]
+pub enum TrainingAlgorithm {
+    Bpe,
+    Mingram { mingram: MingramConfig },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MingramConfig {
+    #[serde(default = "default_mingram_iterations")]
+    pub iterations: NonZeroUsize,
+}
+
+fn default_mingram_iterations() -> NonZeroUsize {
+    NonZeroUsize::new(2).expect("default iteration count is positive")
+}
+
+impl Default for MingramConfig {
+    fn default() -> Self {
+        Self {
+            iterations: default_mingram_iterations(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -357,6 +407,14 @@ pub fn expand_config(
     raw: RawConfig,
     catalog: &PresetCatalog,
 ) -> Result<EffectiveConfig, ConfigError> {
+    if !raw.evaluation.test_fraction.is_finite()
+        || !(0.0 < raw.evaluation.test_fraction && raw.evaluation.test_fraction < 1.0)
+    {
+        return Err(ConfigError::InvalidPresetField {
+            field: "evaluation.test_fraction",
+            reason: "must be strictly between zero and one",
+        });
+    }
     let preset_name = raw
         .preset
         .clone()
@@ -367,7 +425,7 @@ pub fn expand_config(
     apply_preset(&preset_name, catalog, &mut stack, &mut builder)?;
     builder.apply_raw_overrides(&raw);
 
-    builder.into_effective(preset_name, raw.corpus, raw.output)
+    builder.into_effective(preset_name, raw.corpus, raw.output, raw.evaluation)
 }
 
 fn read_json<T>(path: &Path) -> Result<T, ConfigError>
@@ -432,8 +490,10 @@ impl ConfigBuilder {
         preset: String,
         corpus: CorpusConfig,
         output: OutputConfig,
+        evaluation: EvaluationConfig,
     ) -> Result<EffectiveConfig, ConfigError> {
         Ok(EffectiveConfig {
+            evaluation,
             preset,
             num_threads: require_positive_threads(self.num_threads)?,
             corpus,
@@ -535,6 +595,7 @@ impl PartialSentencePieceConfig {
         replace_if_some(&mut self.trainer, other.trainer);
         replace_if_some(&mut self.python, other.python.clone());
         replace_if_some(&mut self.model_type, other.model_type);
+        replace_if_some(&mut self.mingram, other.mingram);
         replace_if_some(&mut self.vocab_size, other.vocab_size);
         replace_if_some(&mut self.character_coverage, other.character_coverage);
         replace_if_some(&mut self.byte_fallback, other.byte_fallback);
@@ -574,10 +635,24 @@ impl PartialSentencePieceConfig {
     }
 
     fn require(self) -> Result<SentencePieceConfig, ConfigError> {
+        let algorithm = match require_field(self.model_type, "sentencepiece.model_type")? {
+            ModelType::Bpe => {
+                if self.mingram.is_some() {
+                    return Err(ConfigError::InvalidPresetField {
+                        field: "sentencepiece.mingram",
+                        reason: "MinGram options require model_type mingram",
+                    });
+                }
+                TrainingAlgorithm::Bpe
+            }
+            ModelType::Mingram => TrainingAlgorithm::Mingram {
+                mingram: self.mingram.unwrap_or_default(),
+            },
+        };
         Ok(SentencePieceConfig {
             trainer: require_field(self.trainer, "sentencepiece.trainer")?,
             python: require_field(self.python, "sentencepiece.python")?,
-            model_type: require_field(self.model_type, "sentencepiece.model_type")?,
+            algorithm,
             vocab_size: require_field(self.vocab_size, "sentencepiece.vocab_size")?,
             character_coverage: require_field(
                 self.character_coverage,
@@ -691,12 +766,92 @@ mod tests {
     use super::*;
 
     fn catalog() -> PresetCatalog {
-        serde_json::from_str(include_str!("../cfg.json.ocr")).expect("preset fixture is valid")
+        serde_json::from_str(include_str!("../cfg.presets.json")).expect("preset fixture is valid")
+    }
+
+    #[test]
+    fn rejects_invalid_holdout_fractions() {
+        let raw: RawConfig = serde_json::from_str(include_str!("../cfg.json")).unwrap();
+        for fraction in [0.0, 1.0, -0.1, f64::NAN, f64::INFINITY] {
+            let mut invalid = raw.clone();
+            invalid.evaluation.test_fraction = fraction;
+            assert!(expand_config(invalid, &catalog()).is_err());
+        }
+    }
+
+    #[test]
+    fn mingram_selection_defaults_and_options_are_typed() {
+        let mut config = catalog()
+            .presets
+            .remove("ocr_multilingual")
+            .unwrap()
+            .sentencepiece;
+        config.model_type = Some(ModelType::Mingram);
+        let effective = config.clone().require().unwrap();
+        assert_eq!(
+            effective.algorithm,
+            TrainingAlgorithm::Mingram {
+                mingram: MingramConfig::default()
+            }
+        );
+        config.mingram = Some(MingramConfig {
+            iterations: NonZeroUsize::new(3).unwrap(),
+        });
+        let effective = config.require().unwrap();
+        let json = serde_json::to_value(&effective).unwrap();
+        assert_eq!(json["model_type"], "mingram");
+        assert_eq!(json["mingram"]["iterations"], 3);
+    }
+
+    #[test]
+    fn mingram_options_are_rejected_for_bpe() {
+        let mut config = catalog()
+            .presets
+            .remove("ocr_multilingual")
+            .unwrap()
+            .sentencepiece;
+        config.mingram = Some(MingramConfig::default());
+        assert!(matches!(
+            config.require(),
+            Err(ConfigError::InvalidPresetField {
+                field: "sentencepiece.mingram",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn zero_iterations_and_unknown_options_are_rejected_at_boundary() {
+        for json in [
+            r#"{"model_type":"mingram","mingram":{"iterations":0}}"#,
+            r#"{"model_type":"mingram","mingram":{"typo":2}}"#,
+        ] {
+            assert!(serde_json::from_str::<PartialSentencePieceConfig>(json).is_err());
+        }
+    }
+
+    #[test]
+    fn shipped_mingram_example_loads() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let config = load_effective_config(
+            &root.join("cfg.mingram.json"),
+            &root.join("cfg.presets.json"),
+        )
+        .unwrap();
+        assert_eq!(
+            config.sentencepiece.algorithm,
+            TrainingAlgorithm::Mingram {
+                mingram: MingramConfig::default()
+            }
+        );
+        assert_eq!(config.sentencepiece.vocab_size, 8192);
+        assert!(!config.balancing.enabled);
     }
 
     #[test]
     fn expands_default_preset() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: None,
             num_threads: None,
             corpus: CorpusConfig {
@@ -714,9 +869,19 @@ mod tests {
 
         let effective = expand_config(raw, &catalog()).expect("default preset expands");
 
-        assert_eq!(effective.preset, "ocr_multilingual");
+        assert_eq!(effective.preset, "multilingual_mingram");
+        assert_eq!(effective.sentencepiece.vocab_size, 8192);
+        assert!(!effective.balancing.enabled);
+        assert_eq!(
+            effective.canonicalization.soft_hyphen,
+            SoftHyphenPolicy::Preserve
+        );
+        assert_eq!(effective.evaluation.test_fraction, 0.05);
         assert_eq!(effective.num_threads, 16);
-        assert_eq!(effective.sentencepiece.model_type, ModelType::Bpe);
+        assert!(matches!(
+            effective.sentencepiece.algorithm,
+            TrainingAlgorithm::Mingram { .. }
+        ));
         assert!(effective.sentencepiece.byte_fallback);
         assert_eq!(effective.validation.line_policy, LinePolicy::FixOrSkip);
     }
@@ -724,6 +889,7 @@ mod tests {
     #[test]
     fn child_preset_replaces_list_values() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: Some("ocr_math_heavy".to_owned()),
             num_threads: None,
             corpus: CorpusConfig {
@@ -751,6 +917,7 @@ mod tests {
     #[test]
     fn user_overrides_preset_field() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: Some("ocr_cjk_heavy".to_owned()),
             num_threads: Some(8),
             corpus: CorpusConfig {
@@ -780,12 +947,20 @@ mod tests {
     fn checked_in_default_config_loads() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
 
-        let effective = load_effective_config(&root.join("cfg.json"), &root.join("cfg.json.ocr"))
-            .expect("checked-in cfg.json loads with preset catalog");
+        let effective =
+            load_effective_config(&root.join("cfg.json"), &root.join("cfg.presets.json"))
+                .expect("checked-in cfg.json loads with preset catalog");
 
-        assert_eq!(effective.preset, "ocr_multilingual");
+        assert_eq!(effective.preset, "multilingual_mingram");
+        assert_eq!(effective.sentencepiece.vocab_size, 8192);
+        assert!(!effective.balancing.enabled);
+        assert_eq!(
+            effective.canonicalization.soft_hyphen,
+            SoftHyphenPolicy::Preserve
+        );
+        assert_eq!(effective.evaluation.test_fraction, 0.05);
         assert_eq!(effective.corpus.path, PathBuf::from("data/raw-corpus"));
-        assert_eq!(effective.output.model_prefix, "ocr_tokenizer");
+        assert_eq!(effective.output.model_prefix, "tokenizer");
         assert_eq!(effective.num_threads, 16);
         assert!(effective.sentencepiece.byte_fallback);
     }
@@ -793,6 +968,7 @@ mod tests {
     #[test]
     fn rejects_zero_threads() {
         let raw = RawConfig {
+            evaluation: EvaluationConfig::default(),
             preset: None,
             num_threads: Some(0),
             corpus: CorpusConfig {

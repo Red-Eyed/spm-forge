@@ -1,0 +1,400 @@
+l'ami révise l'histoire aujourd'hui 85
+l'élève lit la réponse à la maison 27
+l'auteur écrit le livre le matin 60
+l'auteur comprend le texte aujourd'hui 9
+le professeur écrit l'histoire à la maison 41
+l'auteur comprend la réponse aujourd'hui 78
+le professeur écrit le texte le matin 83
+l'auteur révise le livre à la maison 36
+l'auteur révise la langue à la maison 73
+l'élève révise l'histoire à l'école 51
+le professeur écrit le texte à la maison 60
+l'auteur écrit l'histoire à l'école 7
+l'ami lit la réponse à l'école 50
+l'ami révise le texte aujourd'hui 9
+l'élève comprend l'histoire aujourd'hui 9
+l'élève révise le texte à la maison 83
+le professeur comprend le texte le matin 27
+le professeur lit la leçon à la maison 83
+le professeur comprend l'histoire aujourd'hui 11
+le professeur lit le message à l'école 44
+l'auteur révise le livre à l'école 49
+l'élève révise l'histoire à la maison 18
+le professeur écrit la langue aujourd'hui 23
+le professeur révise la leçon aujourd'hui 45
+le professeur révise le message à l'école 72
+le professeur lit le livre le matin 65
+l'ami lit le message aujourd'hui 12
+l'ami révise le livre le matin 28
+l'auteur comprend la leçon à la maison 22
+l'ami comprend le livre aujourd'hui 91
+l'ami lit la leçon aujourd'hui 25
+l'ami lit la question aujourd'hui 51
+l'ami lit le texte à la maison 29
+le professeur révise la question à l'école 34
+l'auteur écrit le message le matin 27
+l'élève comprend l'histoire à la maison 46
+l'élève lit la langue le matin 95
+l'ami révise la question à l'école 11
+l'auteur écrit le texte à l'école 82
+l'auteur lit le texte le matin 19
+le professeur écrit l'histoire à l'école 6
+le professeur comprend le texte à l'école 43
+le professeur révise le livre le matin 31
+l'auteur révise l'histoire aujourd'hui 94
+l'auteur révise la langue le matin 32
+l'élève comprend le texte à la maison 35
+le professeur écrit la leçon aujourd'hui 13
+le professeur révise la réponse le matin 20
+le professeur comprend la question aujourd'hui 27
+l'auteur lit la réponse le matin 62
+le professeur écrit la question à la maison 28
+l'élève lit le livre à l'école 13
+l'élève révise la leçon à l'école 84
+l'ami lit le message le matin 16
+l'auteur révise la leçon aujourd'hui 39
+le professeur lit l'histoire aujourd'hui 43
+l'élève écrit la question le matin 75
+l'élève lit la question à l'école 56
+l'auteur lit l'histoire aujourd'hui 20
+l'élève lit le message à l'école 70
+le professeur comprend la question aujourd'hui 8
+l'ami écrit la leçon à l'école 99
+l'auteur comprend la réponse le matin 64
+l'élève écrit la réponse aujourd'hui 96
+l'auteur révise la langue à l'école 10
+l'ami révise la langue aujourd'hui 5
+le professeur lit le livre à l'école 16
+le professeur révise le texte à l'école 92
+le professeur lit la langue le matin 15
+l'ami comprend la réponse le matin 65
+le professeur écrit le texte à l'école 47
+l'auteur révise la question à la maison 46
+l'élève comprend le message aujourd'hui 15
+l'ami lit le message le matin 65
+le professeur lit le message aujourd'hui 47
+le professeur comprend l'histoire aujourd'hui 82
+l'ami révise la langue à la maison 22
+l'auteur comprend la leçon aujourd'hui 24
+l'auteur écrit la réponse à la maison 17
+le professeur lit la langue à la maison 31
+l'ami révise la leçon à la maison 8
+l'ami lit la réponse à la maison 89
+l'élève lit la réponse le matin 23
+l'ami écrit la question à la maison 45
+le professeur écrit le livre à la maison 95
+l'élève écrit la question à l'école 36
+l'ami écrit le livre à l'école 45
+l'auteur écrit le message à la maison 23
+l'auteur lit la question à l'école 51
+l'ami écrit le message à l'école 73
+l'ami révise la question le matin 71
+l'auteur écrit le texte le matin 60
+l'élève comprend l'histoire à l'école 68
+l'ami comprend le message à la maison 48
+l'ami écrit l'histoire aujourd'hui 60
+le professeur écrit la langue le matin 79
+l'ami révise l'histoire aujourd'hui 77
+l'élève écrit le texte le matin 4
+le professeur lit la question à l'école 70
+l'ami révise l'histoire à la maison 48
+l'élève écrit la leçon à la maison 51
+l'auteur révise le livre le matin 39
+l'ami révise la question le matin 85
+l'auteur écrit le message à l'école 16
+l'élève révise l'histoire à la maison 89
+l'élève écrit la question à la maison 80
+l'ami écrit la langue à l'école 56
+le professeur comprend la question aujourd'hui 21
+l'auteur révise la leçon le matin 79
+le professeur comprend la leçon à la maison 73
+l'auteur lit la langue à la maison 54
+le professeur écrit la langue à la maison 30
+l'ami révise le livre aujourd'hui 94
+l'auteur écrit la question aujourd'hui 81
+l'ami comprend l'histoire à la maison 60
+l'élève révise la leçon à la maison 78
+l'ami révise la réponse à l'école 65
+l'ami écrit la réponse le matin 82
+l'auteur comprend le livre le matin 29
+le professeur comprend la question le matin 73
+le professeur révise la réponse aujourd'hui 33
+l'auteur comprend le texte à l'école 76
+l'élève lit le livre à l'école 43
+l'ami comprend la question le matin 38
+l'élève révise le texte aujourd'hui 17
+le professeur lit le message à l'école 96
+le professeur comprend le livre le matin 25
+l'élève comprend le livre à la maison 83
+l'élève écrit la question aujourd'hui 89
+l'ami écrit le texte à l'école 67
+l'élève lit la leçon le matin 24
+l'ami révise le texte à la maison 60
+l'ami écrit la réponse à l'école 81
+le professeur comprend le livre à la maison 53
+l'auteur révise le livre à la maison 23
+le professeur lit le message aujourd'hui 99
+l'élève écrit le message à l'école 18
+le professeur écrit la question le matin 74
+l'ami comprend le texte aujourd'hui 54
+l'élève révise la langue le matin 21
+l'auteur écrit la réponse aujourd'hui 10
+l'élève lit la réponse aujourd'hui 34
+l'ami révise la question à l'école 63
+le professeur révise la question à la maison 18
+l'ami lit le message aujourd'hui 10
+l'élève comprend le message aujourd'hui 66
+l'ami comprend le message aujourd'hui 97
+le professeur comprend le message aujourd'hui 91
+l'ami écrit le message à l'école 2
+l'auteur comprend le livre à la maison 67
+le professeur comprend le texte à la maison 7
+l'auteur lit la leçon à la maison 6
+le professeur lit la langue à la maison 14
+l'ami révise l'histoire aujourd'hui 84
+l'ami révise le texte à l'école 78
+l'ami écrit la leçon aujourd'hui 6
+le professeur comprend le livre à la maison 23
+le professeur comprend la question le matin 69
+l'auteur comprend le message le matin 33
+l'auteur comprend le texte à l'école 65
+l'élève comprend le livre aujourd'hui 16
+le professeur révise le livre le matin 62
+l'ami lit le message à l'école 79
+l'élève écrit la question aujourd'hui 85
+le professeur révise la réponse aujourd'hui 59
+le professeur écrit la réponse à l'école 14
+l'ami révise la langue à la maison 5
+l'ami écrit le message à la maison 52
+l'auteur écrit la langue le matin 59
+l'ami lit la question aujourd'hui 78
+le professeur comprend le message aujourd'hui 95
+l'auteur écrit le livre le matin 26
+l'auteur écrit la réponse le matin 55
+l'ami comprend la leçon le matin 8
+l'élève comprend le livre à la maison 58
+le professeur révise le message aujourd'hui 50
+l'auteur révise la langue le matin 25
+l'ami révise le texte à l'école 80
+l'élève révise le livre le matin 19
+le professeur révise le texte à la maison 56
+l'auteur lit la leçon aujourd'hui 50
+l'ami révise la réponse aujourd'hui 30
+l'ami lit la question le matin 76
+l'ami lit le livre à la maison 33
+l'ami écrit la réponse aujourd'hui 91
+l'ami révise la réponse aujourd'hui 11
+l'ami comprend le texte le matin 85
+le professeur révise la leçon à l'école 35
+l'ami lit la leçon à l'école 91
+l'auteur révise le message à la maison 83
+le professeur comprend la langue aujourd'hui 12
+l'ami révise l'histoire le matin 74
+le professeur révise la leçon le matin 46
+l'auteur écrit l'histoire aujourd'hui 43
+l'auteur comprend la réponse à la maison 58
+l'élève comprend le message à l'école 40
+le professeur comprend la leçon à l'école 87
+l'ami écrit le texte aujourd'hui 7
+l'auteur lit la leçon à la maison 35
+le professeur comprend l'histoire le matin 47
+l'auteur lit le message à l'école 9
+l'auteur écrit la leçon à la maison 50
+l'auteur lit l'histoire aujourd'hui 41
+l'ami révise la réponse le matin 82
+l'élève comprend le texte aujourd'hui 16
+le professeur écrit la question à la maison 93
+l'auteur comprend l'histoire à l'école 91
+l'élève lit la langue aujourd'hui 85
+l'auteur révise le livre aujourd'hui 74
+l'auteur lit le texte le matin 17
+l'élève révise le message à la maison 10
+le professeur comprend la langue aujourd'hui 89
+l'ami écrit le livre à la maison 18
+l'ami comprend la leçon aujourd'hui 41
+l'ami comprend l'histoire à la maison 35
+l'ami révise le livre aujourd'hui 65
+l'auteur écrit la leçon à la maison 84
+l'ami écrit la leçon le matin 66
+le professeur lit la réponse le matin 6
+l'élève écrit la question à la maison 98
+l'auteur lit le message à la maison 29
+l'élève révise le texte aujourd'hui 50
+l'élève lit la langue à la maison 72
+l'élève écrit la question à l'école 0
+l'élève lit le livre à l'école 50
+l'auteur comprend le texte aujourd'hui 50
+l'ami lit la leçon à la maison 47
+l'ami écrit la réponse le matin 57
+le professeur révise l'histoire le matin 85
+l'élève révise la question le matin 88
+l'auteur lit la question le matin 12
+l'ami écrit le livre le matin 36
+l'élève révise le message à la maison 91
+l'auteur écrit la question à la maison 98
+l'ami comprend la réponse aujourd'hui 0
+l'ami lit la leçon à l'école 0
+l'auteur comprend le livre à la maison 41
+l'auteur comprend l'histoire à l'école 48
+l'élève révise le message aujourd'hui 96
+l'élève écrit le texte aujourd'hui 34
+l'ami comprend la réponse aujourd'hui 33
+l'élève lit le livre aujourd'hui 70
+l'auteur lit le livre à la maison 87
+l'auteur écrit la leçon à la maison 99
+le professeur comprend la langue le matin 60
+l'ami révise la question à la maison 95
+l'élève écrit le message le matin 49
+l'élève écrit la question aujourd'hui 26
+l'élève écrit le message à l'école 62
+l'ami révise le message à l'école 38
+le professeur révise le message à la maison 85
+le professeur révise la réponse à l'école 34
+l'auteur écrit la réponse à l'école 42
+l'élève révise la réponse le matin 14
+le professeur comprend le livre le matin 38
+l'ami révise le message aujourd'hui 23
+l'auteur révise la leçon à l'école 66
+le professeur révise la leçon à la maison 38
+l'élève lit le message à la maison 5
+l'ami révise l'histoire le matin 86
+l'élève lit la leçon le matin 61
+l'auteur comprend la langue à l'école 63
+l'élève écrit la langue à la maison 89
+l'élève écrit le livre le matin 4
+l'auteur écrit le livre à l'école 85
+le professeur lit la question à l'école 3
+l'ami lit la question à la maison 18
+l'auteur écrit la question à l'école 73
+l'auteur écrit la réponse à l'école 51
+l'élève écrit le texte à l'école 40
+l'ami lit la question à la maison 44
+le professeur lit la réponse le matin 23
+l'élève écrit l'histoire le matin 22
+l'ami écrit l'histoire aujourd'hui 23
+l'ami lit l'histoire à la maison 22
+le professeur révise la question le matin 75
+l'élève comprend la question le matin 65
+l'auteur comprend la leçon à la maison 57
+l'élève comprend le message à la maison 3
+l'élève révise la langue à la maison 97
+l'auteur écrit le message à la maison 65
+l'élève révise l'histoire aujourd'hui 74
+l'auteur écrit la réponse aujourd'hui 70
+l'ami écrit le livre à l'école 43
+l'ami lit le message aujourd'hui 26
+le professeur lit la réponse aujourd'hui 26
+l'ami écrit la langue à la maison 98
+l'auteur comprend la réponse le matin 4
+l'élève comprend la question aujourd'hui 38
+l'ami révise la question à l'école 22
+le professeur lit le livre le matin 11
+l'élève comprend la leçon le matin 22
+le professeur révise la réponse à la maison 0
+l'auteur révise la langue le matin 89
+le professeur écrit le livre le matin 14
+l'ami lit le texte à la maison 88
+l'auteur comprend le message à la maison 0
+l'élève lit le texte à la maison 64
+le professeur révise le message à l'école 38
+le professeur écrit la question aujourd'hui 77
+le professeur révise la leçon le matin 53
+l'ami comprend le livre le matin 75
+l'ami lit la langue à l'école 75
+le professeur écrit le livre aujourd'hui 33
+l'élève écrit la réponse aujourd'hui 43
+l'ami écrit le message à l'école 69
+l'auteur comprend le livre aujourd'hui 67
+le professeur révise la leçon à la maison 1
+l'élève lit la question aujourd'hui 25
+l'auteur lit la leçon aujourd'hui 39
+l'ami écrit le texte le matin 62
+l'auteur révise le livre aujourd'hui 60
+l'élève lit l'histoire le matin 21
+le professeur lit le livre à la maison 92
+l'auteur lit l'histoire à la maison 92
+le professeur révise l'histoire à l'école 34
+le professeur lit le texte le matin 57
+l'élève révise la langue à la maison 48
+l'auteur écrit la leçon le matin 49
+l'élève lit la réponse le matin 33
+le professeur révise le message aujourd'hui 23
+le professeur lit le texte aujourd'hui 99
+l'ami écrit la langue aujourd'hui 94
+l'auteur écrit la leçon à la maison 62
+le professeur écrit la langue le matin 74
+l'ami écrit le livre le matin 1
+l'élève comprend le texte à l'école 12
+l'auteur lit le texte à l'école 99
+l'ami lit la langue aujourd'hui 90
+le professeur révise la leçon à la maison 96
+l'auteur écrit le message aujourd'hui 44
+l'ami révise le livre le matin 51
+l'auteur lit la question à la maison 95
+l'auteur comprend le livre aujourd'hui 47
+l'auteur révise la réponse aujourd'hui 60
+l'élève comprend la langue le matin 32
+l'auteur révise la réponse à l'école 62
+le professeur révise la leçon le matin 54
+l'ami écrit l'histoire à la maison 98
+l'élève comprend le texte le matin 99
+l'ami révise le message à la maison 22
+le professeur révise la leçon le matin 39
+le professeur comprend la réponse le matin 65
+l'auteur comprend la langue à la maison 46
+l'élève comprend la leçon le matin 36
+le professeur comprend l'histoire aujourd'hui 23
+l'élève écrit le texte à la maison 96
+l'auteur révise le message à la maison 26
+l'auteur comprend le texte le matin 39
+l'élève écrit le texte aujourd'hui 67
+l'auteur lit la leçon à la maison 80
+l'auteur révise la réponse aujourd'hui 66
+l'auteur lit le message aujourd'hui 15
+l'ami écrit l'histoire à la maison 68
+l'ami révise la question à l'école 44
+l'élève lit le livre à l'école 48
+l'auteur révise le texte le matin 46
+l'auteur comprend le texte aujourd'hui 55
+l'auteur lit la réponse aujourd'hui 51
+l'élève comprend le message à l'école 52
+le professeur comprend la réponse à l'école 72
+l'auteur lit la leçon le matin 64
+le professeur comprend la langue à la maison 3
+l'ami révise le texte à la maison 11
+le professeur écrit le texte aujourd'hui 48
+l'auteur révise la question à l'école 35
+l'élève comprend la langue aujourd'hui 86
+l'élève comprend la leçon le matin 70
+le professeur révise la question aujourd'hui 89
+l'ami comprend la question le matin 96
+l'auteur écrit la leçon le matin 26
+l'ami révise le message le matin 92
+l'ami révise la langue à l'école 15
+l'auteur comprend la leçon le matin 64
+l'ami comprend le texte à l'école 12
+l'auteur révise la langue à l'école 32
+l'élève révise la question aujourd'hui 86
+l'ami comprend l'histoire le matin 14
+le professeur comprend l'histoire le matin 61
+l'auteur écrit la langue le matin 16
+l'ami comprend le livre aujourd'hui 90
+l'élève écrit le livre aujourd'hui 3
+l'élève comprend la réponse à l'école 44
+l'ami lit le texte aujourd'hui 75
+le professeur comprend la question le matin 65
+l'élève écrit le message à l'école 65
+l'ami révise la question aujourd'hui 98
+l'ami lit le texte aujourd'hui 4
+le professeur révise la réponse aujourd'hui 64
+l'élève écrit la langue à l'école 24
+l'élève révise le message à l'école 39
+l'élève comprend le message le matin 10
+l'élève comprend le livre le matin 92
+le professeur comprend la leçon aujourd'hui 29
+l'ami comprend le texte à l'école 99
+l'élève révise l'histoire à l'école 76
+le professeur comprend le texte le matin 57
+l'auteur révise la question le matin 24
+l'ami comprend la leçon à l'école 62
+l'élève comprend la leçon le matin 35

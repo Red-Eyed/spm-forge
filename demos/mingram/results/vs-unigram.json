@@ -1,0 +1,322 @@
+{
+  "baseline_model_blake3": "bdc596897ce2c5636ab2106ca54e7d5b1adbba849c69878bd2fb04a07d26e3d9",
+  "candidate_model_blake3": "3ba4defde90349cf9e842f4c49adf20e34750f9798e87ae57ed641e8b0c83831",
+  "baseline_vocab_size": 512,
+  "candidate_vocab_size": 512,
+  "same_vocab_size": true,
+  "normalization_matches": true,
+  "files": [
+    {
+      "input": "demos/mingram/data/heldout-arabic.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 21347,
+          "improved_records": 400,
+          "unchanged_records": 0,
+          "worsened_records": 0,
+          "baseline": {
+            "tokens": 7741,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 4040,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 0.5218963958144942
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": 47.81036041855058
+        }
+      }
+    },
+    {
+      "input": "demos/mingram/data/heldout-chinese.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 11643,
+          "improved_records": 6,
+          "unchanged_records": 0,
+          "worsened_records": 394,
+          "baseline": {
+            "tokens": 1636,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 2754,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 1.6833740831295843
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": -68.33740831295843
+        }
+      }
+    },
+    {
+      "input": "demos/mingram/data/heldout-english.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 17037,
+          "improved_records": 400,
+          "unchanged_records": 0,
+          "worsened_records": 0,
+          "baseline": {
+            "tokens": 9535,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 4306,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 0.4515993707393812
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": 54.840062926061876
+        }
+      }
+    },
+    {
+      "input": "demos/mingram/data/heldout-french.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 16260,
+          "improved_records": 399,
+          "unchanged_records": 1,
+          "worsened_records": 0,
+          "baseline": {
+            "tokens": 8963,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 5474,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 0.6107330134999442
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": 38.92669865000558
+        }
+      }
+    },
+    {
+      "input": "demos/mingram/data/heldout-hindi.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 31031,
+          "improved_records": 400,
+          "unchanged_records": 0,
+          "worsened_records": 0,
+          "baseline": {
+            "tokens": 10585,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 4316,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 0.407746811525744
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": 59.2253188474256
+        }
+      }
+    },
+    {
+      "input": "demos/mingram/data/heldout-japanese.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 14954,
+          "improved_records": 272,
+          "unchanged_records": 5,
+          "worsened_records": 123,
+          "baseline": {
+            "tokens": 3931,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 3182,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 0.8094632409056219
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": 19.053675909437807
+        }
+      }
+    },
+    {
+      "input": "demos/mingram/data/heldout-korean.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 16255,
+          "improved_records": 400,
+          "unchanged_records": 0,
+          "worsened_records": 0,
+          "baseline": {
+            "tokens": 6094,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 3168,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 0.51985559566787
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": 48.014440433213004
+        }
+      }
+    },
+    {
+      "input": "demos/mingram/data/heldout-thai.txt",
+      "metrics": {
+        "counts": {
+          "records": 400,
+          "empty_records": 0,
+          "text_bytes": 28937,
+          "improved_records": 400,
+          "unchanged_records": 0,
+          "worsened_records": 0,
+          "baseline": {
+            "tokens": 7859,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          },
+          "candidate": {
+            "tokens": 4189,
+            "unknown_tokens": 0,
+            "byte_tokens": 0,
+            "raw_round_trip_failures": 0,
+            "normalized_round_trip_failures": 0
+          }
+        },
+        "token_count_ratio": {
+          "status": "defined",
+          "value": 0.5330194681257158
+        },
+        "percent_tokens_saved": {
+          "status": "defined",
+          "value": 46.69805318742842
+        }
+      }
+    }
+  ],
+  "total": {
+    "counts": {
+      "records": 3200,
+      "empty_records": 0,
+      "text_bytes": 157464,
+      "improved_records": 2677,
+      "unchanged_records": 6,
+      "worsened_records": 517,
+      "baseline": {
+        "tokens": 56344,
+        "unknown_tokens": 0,
+        "byte_tokens": 0,
+        "raw_round_trip_failures": 0,
+        "normalized_round_trip_failures": 0
+      },
+      "candidate": {
+        "tokens": 31429,
+        "unknown_tokens": 0,
+        "byte_tokens": 0,
+        "raw_round_trip_failures": 0,
+        "normalized_round_trip_failures": 0
+      }
+    },
+    "token_count_ratio": {
+      "status": "defined",
+      "value": 0.557805622604004
+    },
+    "percent_tokens_saved": {
+      "status": "defined",
+      "value": 44.2194377395996
+    }
+  }
+}

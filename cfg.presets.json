@@ -1,7 +1,75 @@
 {
   "version": 1,
-  "default": "ocr_multilingual",
+  "default": "multilingual_mingram",
   "presets": {
+    "multilingual_mingram": {
+      "description": "General-purpose multilingual MinGram: NFC, 8192 pieces, byte fallback, and natural corpus frequencies.",
+      "num_threads": 16,
+      "canonicalization": {
+        "unicode_form": "nfc",
+        "strip": [],
+        "map_nbsp_to_space": false,
+        "fold_arabic_presentation_forms": false,
+        "soft_hyphen": "preserve",
+        "preserve_zwj_zwnj": true,
+        "preserve_compatibility_chars": true
+      },
+      "balancing": {
+        "enabled": false,
+        "mode": "conservative",
+        "total_lines": 20000000,
+        "alpha": 0.7,
+        "hierarchy": [
+          "domain",
+          "script",
+          "language_hint",
+          "source_group",
+          "length_bin"
+        ],
+        "min_keep_fraction": 0.5,
+        "max_downsample_ratio": 4.0,
+        "collapse_buckets_below_lines": 1000,
+        "max_part_lines": 1000000,
+        "shuffle_seed": 1337
+      },
+      "sentencepiece": {
+        "trainer": "python_sentencepiece",
+        "python": {
+          "runner": "uv",
+          "args": [
+            "run",
+            "python"
+          ],
+          "module": "spm_ocr_train_bridge"
+        },
+        "model_type": "mingram",
+        "vocab_size": 8192,
+        "character_coverage": 0.9995,
+        "byte_fallback": true,
+        "normalization_rule_name": "identity",
+        "add_dummy_prefix": false,
+        "remove_extra_whitespaces": false,
+        "split_by_unicode_script": true,
+        "split_by_whitespace": true,
+        "split_digits": false,
+        "max_sentencepiece_length": 16,
+        "max_sentence_length": 16384,
+        "input_sentence_size": 1000000,
+        "shuffle_input_sentence": true,
+        "train_extremely_large_corpus": true,
+        "user_defined_symbols": [],
+        "mingram": {
+          "iterations": 2
+        }
+      },
+      "validation": {
+        "mode": "report",
+        "line_policy": "fix_or_skip",
+        "issue_log": "reports/corpus_issues.jsonl",
+        "include_line_text_in_log": false,
+        "round_trip_sample_per_bucket": 1000
+      }
+    },
     "ocr_multilingual": {
       "description": "General multilingual OCR tokenizer preset. Faithful Unicode labels, balanced corpus assembly, and conservative BPE pieces.",
       "num_threads": 16,

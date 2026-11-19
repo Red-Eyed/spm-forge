@@ -1,0 +1,50 @@
+{
+  "seed": 20261118,
+  "files": [
+    {
+      "path": "train.txt",
+      "sha256": "7e78fbb09281b322296149e047402602647fb0eeb798a028124972b45e2d3d40",
+      "records": 16000
+    },
+    {
+      "path": "heldout-arabic.txt",
+      "sha256": "521081e9c7dc5c8d6ad4db0e661abb73ee4ae30b39eeb31e120765aa8104b799",
+      "records": 400
+    },
+    {
+      "path": "heldout-chinese.txt",
+      "sha256": "6862c59692fbccab5320d003895bb318ae373afae4f38629b675737b463cb432",
+      "records": 400
+    },
+    {
+      "path": "heldout-english.txt",
+      "sha256": "db7d71a797865803cda5b1fc1a361c45f85bc5a7fd88a8c9488d4aa7eb69f197",
+      "records": 400
+    },
+    {
+      "path": "heldout-french.txt",
+      "sha256": "60815ff538778219f1eabd099ead9fbe788ce07ff38328cceb57a6664a53a22e",
+      "records": 400
+    },
+    {
+      "path": "heldout-hindi.txt",
+      "sha256": "93cc067ce8597c96877f6a54e6d29c210a4885dd711b2f01a4da99c4673c2640",
+      "records": 400
+    },
+    {
+      "path": "heldout-japanese.txt",
+      "sha256": "5430e19e0c5ae74e36389c58d3fc329064c915423130bc4dc625733f8ae06781",
+      "records": 400
+    },
+    {
+      "path": "heldout-korean.txt",
+      "sha256": "5163e4ac98b680cb194696a1964fbf1a8c2dbd910304a0ec9583e9cf2e935696",
+      "records": 400
+    },
+    {
+      "path": "heldout-thai.txt",
+      "sha256": "e5db0457fe280ad4d21a260fa66b7b71360d11dfb18afb3ea1ca28d607307e3d",
+      "records": 400
+    }
+  ]
+}

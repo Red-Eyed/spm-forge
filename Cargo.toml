@@ -1,6 +1,6 @@
 [package]
 name = "spm-ocr"
-version = "0.4.20"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
 authors = ["Vadym Stupakov <vadim.stupakov@gmail.com>"]
@@ -30,6 +30,9 @@ unicode-segmentation = "1"
 unicode-script = "0.5"
 xz2 = "0.1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+sentencepiece = { version = "0.14", features = ["static"] }
+sentencepiece-model = "0.1.4"
+prost = "0.13"
 
 [dev-dependencies]
 tempfile = "3"
