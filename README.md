@@ -156,8 +156,8 @@ those defaults, so the Rust OCR presets still select their configured vocabulary
 For a Python-only experiment, call `_train` with `input` and `model_prefix`, or replay an
 edited `trainer_request.json` with `uv run python -m spm_ocr_train_bridge <request.json>`.
 The Python fallback vocabulary size is 8192; other fallback choices use OCR settings
-where applicable and SentencePiece 0.2.2 defaults otherwise.
-`auto_character_coverage` is not supported by the currently available 0.2.2 wheel.
+where applicable and SentencePiece 0.2.3 defaults otherwise.
+The patched release wheel exposes sparse Unigram options through TrainerSpec.
 
 ## Held-out evaluation
 
@@ -210,6 +210,18 @@ existing in-memory sampling path.
 - `work_dir/reports/tokenizer.json`: structured evaluation and provenance.
 - `work_dir/trainer_request.json`: replayable trainer request.
 - `work_dir/trainer_output.json`: trainer status and artifact paths.
+
+## SentencePiece wheel source
+
+`uv sync --locked` installs `sentencepiece==0.2.3.post1` exclusively from the
+[spm-forge SentencePiece release](https://github.com/Red-Eyed/sentencepiece/releases/tag/spmforge-v0.2.3.post1).
+The explicit flat index in `pyproject.toml` selects that release only for SentencePiece;
+other dependencies retain their existing source. `uv.lock` pins wheel URLs and SHA-256
+hashes, and `no-build-package` prevents a SentencePiece source-build fallback.
+
+Prebuilt wheels support CPython 3.11–3.14 (including free-threaded 3.14), Linux x86_64
+with glibc 2.27+, and macOS ARM64 with macOS 11+. Unsupported Python/platform combinations
+fail installation rather than compiling SentencePiece. No local fork checkout is required.
 
 ## Sparse Unigram experiment
 

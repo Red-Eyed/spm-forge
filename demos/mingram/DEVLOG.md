@@ -154,3 +154,22 @@ Markdown and JSON reports now aggregate source hints with ratios computed from s
 code points and tokens. A regression test uses unequal shard sizes to distinguish this
 from averaging per-shard ratios. The report cache version changes so existing evaluations
 regenerate without repeating preparation or native training.
+
+### Published fork wheel verification
+
+`spmforge-v0.2.3.post1` provides ten checksum-verified wheels: Linux x86_64
+manylinux 2.27/2.28 and macOS ARM64 11+, CPython 3.11–3.14 including free-threaded
+3.14. A clean `uv sync --locked --no-dev` installed the free-threaded macOS wheel
+from the explicit GitHub Release index without building SentencePiece.
+
+A second 512-piece native run through the normal project `uv` bridge reused the
+prepared split with a new model prefix. It emitted 18,719 candidate tokens versus
+18,295 BPE tokens (-2.318% savings), with 1.084 versus 1.109 code points per token
+and no unknown IDs or reconstruction failures. Both training runs sampled at most
+10,000 of 15,212 training chunks independently; the samples were not frozen between
+runs, so the first and second smoke results are separate observations. The saved
+model confirms that sparse pruning and automatic character coverage were enabled.
+
+The native request adoption guard now permits a fresh output prefix in the same
+work directory when no target model/vocabulary exists, while rejecting unrelated
+existing artifacts. The complete project check passed against the release wheel.
