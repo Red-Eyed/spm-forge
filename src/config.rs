@@ -217,6 +217,7 @@ pub struct PartialBalancingConfig {
 #[serde(rename_all = "snake_case")]
 pub enum BalancingMode {
     Conservative,
+    ScriptSample,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

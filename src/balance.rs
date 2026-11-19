@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use unicode_script::{Script, UnicodeScript};
 
-use crate::config::EffectiveConfig;
+use crate::config::{BalancingMode, EffectiveConfig};
 use crate::progress::{ProgressReporter, StageProgress};
 use crate::repair::{RepairSummary, ShardSummary};
 
@@ -149,19 +149,20 @@ pub fn balance_corpus(
         ),
         bytes.iter().sum(),
     );
-    let summary = if config.balancing.enabled {
-        assemble_balanced(config, repair, &paths, &stage, progress)?
-    } else {
-        let buckets = copy_shards_to_training_parts(config, repair, &paths, &stage)?;
-        let training_files = collect_training_files(&buckets);
-        write_report(
-            training_files,
-            paths.report.clone(),
-            repair.shards.iter().map(|s| s.lines).sum(),
-            repair.shards.iter().map(|s| s.lines).sum(),
-            buckets,
-        )?
-    };
+    let summary =
+        if config.balancing.enabled && config.balancing.mode == BalancingMode::Conservative {
+            assemble_balanced(config, repair, &paths, &stage, progress)?
+        } else {
+            let buckets = copy_shards_to_training_parts(config, repair, &paths, &stage)?;
+            let training_files = collect_training_files(&buckets);
+            write_report(
+                training_files,
+                paths.report.clone(),
+                repair.shards.iter().map(|s| s.lines).sum(),
+                repair.shards.iter().map(|s| s.lines).sum(),
+                buckets,
+            )?
+        };
 
     stage.finish(format!(
         "balanced corpus: {} input line(s), {} output line(s)",

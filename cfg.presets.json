@@ -353,8 +353,8 @@
         "preserve_compatibility_chars": true
       },
       "balancing": {
-        "enabled": false,
-        "mode": "conservative",
+        "enabled": true,
+        "mode": "script_sample",
         "total_lines": 20000000,
         "alpha": 0.7,
         "hierarchy": [

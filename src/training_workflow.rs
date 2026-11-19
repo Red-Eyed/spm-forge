@@ -8,7 +8,7 @@ use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::cancel::CancellationToken;
-use crate::config::{EffectiveConfig, MingramConfig, TrainingAlgorithm};
+use crate::config::{BalancingMode, EffectiveConfig, MingramConfig, TrainingAlgorithm};
 use crate::corpus_split::SplitManifest;
 use crate::progress::ProgressReporter;
 use crate::tokenizer::{
@@ -25,8 +25,18 @@ pub fn train_and_report(
     progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<TrainerOutput> {
-    let inputs = split.train_paths();
-    let identity = checkpoint::key(&(1, &split.train))?;
+    let mut training_config = config.clone();
+    let (inputs, identity) =
+        if config.balancing.enabled && config.balancing.mode == BalancingMode::ScriptSample {
+            let sample = crate::script_sampling::prepare(config, split, progress, cancellation)?;
+            training_config.sentencepiece.input_sentence_size = 0;
+            training_config.sentencepiece.shuffle_input_sentence = false;
+            let identity = checkpoint::key(&(1, &split.train, &sample))?;
+            (sample.files, identity)
+        } else {
+            (split.train_paths(), checkpoint::key(&(1, &split.train))?)
+        };
+    let fitted = &training_config;
     let store = Store::new(
         config
             .output
@@ -36,17 +46,17 @@ pub fn train_and_report(
     );
     let output = match config.sentencepiece.algorithm {
         TrainingAlgorithm::Bpe | TrainingAlgorithm::Unigram { .. } => {
-            cached_native(config, &inputs, &store, "candidate", progress, cancellation)?
+            cached_native(fitted, &inputs, &store, "candidate", progress, cancellation)?
         }
         TrainingAlgorithm::Mingram { mingram } => {
-            train_mingram(config, &inputs, mingram, &store, progress, cancellation)?
+            train_mingram(fitted, &inputs, mingram, &store, progress, cancellation)?
         }
     };
-    publish_training_metadata(config, &inputs, &output)?;
+    publish_training_metadata(fitted, &inputs, &output)?;
     let baseline = match config.sentencepiece.algorithm {
         TrainingAlgorithm::Bpe => output.model.clone(),
         TrainingAlgorithm::Mingram { .. } | TrainingAlgorithm::Unigram { .. } => {
-            let mut baseline = config.clone();
+            let mut baseline = fitted.clone();
             baseline.sentencepiece.algorithm = TrainingAlgorithm::Bpe;
             baseline.output.work_dir = config
                 .output
@@ -120,7 +130,8 @@ fn evaluate_and_report(
         config.output.work_dir.join("reports/tokenizer.json"),
     ];
     let evaluation_key = checkpoint::key(&(
-        2,
+        3,
+        &store.identity,
         &split.test,
         Model::load(baseline)?.fingerprint(),
         Model::load(candidate)?.fingerprint(),

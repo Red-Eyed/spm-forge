@@ -194,7 +194,7 @@ Default balancing is disabled and preparation streams records without a corpus-w
 Native BPE seed and baseline training each sample at most 1,000,000 training chunks; MinGram
 replays all training chunks. The independent native samples need not be identical. Training a
 matched baseline adds one BPE training run. Explicitly enabled legacy balancing still uses its
-existing in-memory sampling path.
+existing in-memory sampling path in `conservative` mode.
 
 ## Outputs
 
@@ -238,6 +238,10 @@ Its tokenizer settings are explicit:
   "canonicalization": {
     "unicode_form": "nfc"
   },
+  "balancing": {
+    "enabled": true,
+    "mode": "script_sample"
+  },
   "sentencepiece": {
     "model_type": "unigram",
     "vocab_size": 8192,
@@ -265,6 +269,42 @@ To reuse an existing prepared corpus, set the same `output.work_dir`, choose a n
 Preparation settings and split policy must match the saved manifest. Completed native
 models and reports can be reused; an interrupted native Unigram fit restarts that fit.
 
+### Content-only script sampling
+
+The sparse preset enables `balancing.mode: "script_sample"`. Groups come only from
+Unicode script properties of the text; filenames, directory names, language hints,
+and source groups do not affect quotas or random seeds. All Latin text shares one
+group. Records with multiple strong scripts use `mixed`; records without a strong
+script use `common`. Common/inherited characters do not create additional scripts.
+Their code points still count toward the record's total length.
+
+The sampler allocates expected code-point mass in proportion to the square root of
+each group's code-point count. It converts that allocation to record quotas using
+mean record lengths, caps quotas at available records, and preserves at least one
+record per group. Records stay intact, so realized character proportions are
+approximate and reported. There is no duplication or per-language weighting.
+If the budget covers the entire corpus, all records are retained unchanged.
+
+The record budget is the smaller of `balancing.total_lines` and a positive
+`sentencepiece.input_sentence_size`; if native input size is zero, only the former
+limit applies. The sparse defaults therefore select at most 1,000,000 records.
+`balancing.shuffle_seed` controls deterministic selection. The legacy `alpha`,
+`hierarchy`, and conservative floor settings do not control this mode.
+
+Two sequential training-data passes count and select records, with bounded parallel
+classification batches and no corpus-sized record/index reservoir. Both trainers
+read the exact same saved sample with native sampling disabled. The held-out corpus
+is not sampled. `reports/script_sample.json` and the tokenizer Markdown report show
+input/selected records and code points for each script. Sample census and selection
+checkpoint after each input file; interrupted files repeat, completed files are
+reused after checksum verification. A new sampling budget/seed uses a distinct
+sample cache; changed model inputs still require a new model prefix.
+
+`train-only` can enable script sampling on a previously prepared **unbalanced** corpus
+without repeating repair, provided the other saved preparation settings match.
+Previously resampled conservative corpora require fresh preparation. Set
+`balancing.enabled` to `false` to retain the original native sampling behavior.
+
 The report compares the candidate against equal-budget BPE. It includes code points per
 token for every test shard and source group, token savings, quantiles, fallback usage,
 and reconstruction failures. Source groups are filename-derived hints, not original-file
@@ -273,7 +313,7 @@ pruning plus automatic character allocation together. Set `auto_character_covera
 `false` to isolate sparse pruning with fixed character coverage.
 
 Sparse pruning optimizes regularized likelihood, so fewer tokens are an experimental
-outcome rather than a guarantee. On a synthetic 512-piece smoke test, it used 18,721 tokens
+outcome rather than a guarantee. Before script balancing was added, a synthetic 512-piece smoke test used 18,721 tokens
 versus BPE's 18,205 (2.834% more); reconstruction checks passed. This validates the workflow,
 not a compression recommendation for real multilingual corpora.
 

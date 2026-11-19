@@ -173,3 +173,37 @@ model confirms that sparse pruning and automatic character coverage were enabled
 The native request adoption guard now permits a fresh output prefix in the same
 work directory when no target model/vocabulary exists, while rejecting unrelated
 existing artifacts. The complete project check passed against the release wheel.
+
+## Content-only script-balanced sampling
+
+The sparse preset now uses `balancing.mode: "script_sample"`. Classification reads
+Unicode script properties from text only, with one Latin bucket and separate mixed
+and common buckets. No language/source/filename weighting or ICU dependency is added.
+A cached two-pass sampler allocates square-root code-point mass, converts it to exact
+record quotas using mean lengths, and caps quotas at available records. It selects
+intact records without replacement; actual code-point totals are reported rather than
+claimed to match quotas exactly. Memory holds bounded batches and per-script state,
+not a corpus-sized record/index reservoir. Native resampling is disabled for both
+candidate and BPE, which receive identical sample filenames.
+
+The existing prepared synthetic corpus was reused through `train-only`: 1,000 of
+15,212 training records were selected across seven script groups; all 788 held-out
+records remained available for evaluation. Input Latin/Thai code-point totals were
+155,276/49,432, and selected totals were 5,712/3,294. At 512 pieces, BPE emitted 18,166
+tokens and sparse Unigram emitted 18,631 (-2.560% savings), with no unknown IDs or
+reconstruction failures. This smoke test changes both training sample size and its
+composition relative to earlier experiments, so it does not isolate a balancing gain.
+
+A fresh preparation/train smoke test also passed (18,210 BPE tokens, 18,623 candidate
+tokens, -2.268% savings). A saved sample is deterministic for a given ordered prepared
+corpus and seed. The existing preparation stage can produce different shard ordering
+for tied script classifications, so the fresh and reused preparations are separate
+observations, not an exact replay comparison. Re-running the saved preparation reused
+the census, verified selected parts, and reused both trained models and evaluation.
+
+Regression tests cross bounded batch boundaries, compare renamed inputs and different
+worker counts with fixed record order, resume from a completed-file selection checkpoint,
+check code-point allocation with unequal record lengths and supply caps, reject changed
+sample files, and prove sampling does not read held-out files. `just check` passed all
+85 Rust tests including native/Python interoperability checks, lint/type checks, and
+the release build. No compression improvement on the production corpus is established.
