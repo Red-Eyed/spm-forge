@@ -231,6 +231,9 @@ fn legacy_native_output(
     expected: &TrainerRequest,
     owned: bool,
 ) -> Result<Option<TrainerOutput>> {
+    if !paths.model.exists() && !paths.vocab.exists() {
+        return Ok(None);
+    }
     if !paths.request.exists() {
         ensure!(
             owned || (!paths.model.exists() && !paths.vocab.exists()),
@@ -409,6 +412,24 @@ fn seed_config(config: &EffectiveConfig) -> Result<EffectiveConfig> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn new_native_prefix_ignores_another_models_shared_request() {
+        let temp = TempDir::new().unwrap();
+        let mut config = trainer::tests::config(temp.path());
+        config.output.model_prefix = "first".into();
+        let previous = native_request(&config, &[]);
+        let paths = TrainerPaths::from_config(&config);
+        fs::write(&paths.request, serde_json::to_vec(&previous).unwrap()).unwrap();
+        config.output.model_prefix = "second".into();
+        let paths = TrainerPaths::from_config(&config);
+        let expected = native_request(&config, &[]);
+        assert!(legacy_native_output(&paths, &expected, false)
+            .unwrap()
+            .is_none());
+        fs::write(&paths.model, b"untracked model").unwrap();
+        assert!(legacy_native_output(&paths, &expected, false).is_err());
+    }
 
     #[test]
     fn seed_configuration_is_bpe_without_mutating_the_final_algorithm() {
