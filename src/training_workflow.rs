@@ -35,7 +35,7 @@ pub fn train_and_report(
         identity,
     );
     let output = match config.sentencepiece.algorithm {
-        TrainingAlgorithm::Bpe => {
+        TrainingAlgorithm::Bpe | TrainingAlgorithm::Unigram { .. } => {
             cached_native(config, &inputs, &store, "candidate", progress, cancellation)?
         }
         TrainingAlgorithm::Mingram { mingram } => {
@@ -45,7 +45,7 @@ pub fn train_and_report(
     publish_training_metadata(config, &inputs, &output)?;
     let baseline = match config.sentencepiece.algorithm {
         TrainingAlgorithm::Bpe => output.model.clone(),
-        TrainingAlgorithm::Mingram { .. } => {
+        TrainingAlgorithm::Mingram { .. } | TrainingAlgorithm::Unigram { .. } => {
             let mut baseline = config.clone();
             baseline.sentencepiece.algorithm = TrainingAlgorithm::Bpe;
             baseline.output.work_dir = config
@@ -84,7 +84,7 @@ fn publish_training_metadata(
     let paths = TrainerPaths::from_config(config);
     checkpoint::atomic_write(&paths.output, &serde_json::to_vec_pretty(output)?)?;
     match config.sentencepiece.algorithm {
-        TrainingAlgorithm::Bpe => checkpoint::atomic_write(
+        TrainingAlgorithm::Bpe | TrainingAlgorithm::Unigram { .. } => checkpoint::atomic_write(
             &paths.request,
             &serde_json::to_vec_pretty(&trainer::build_trainer_request(config, inputs, &paths))?,
         )?,
@@ -120,7 +120,7 @@ fn evaluate_and_report(
         config.output.work_dir.join("reports/tokenizer.json"),
     ];
     let evaluation_key = checkpoint::key(&(
-        1,
+        2,
         &split.test,
         Model::load(baseline)?.fingerprint(),
         Model::load(candidate)?.fingerprint(),
@@ -268,12 +268,14 @@ fn legacy_native_output(
         "saved native vocabulary size differs"
     );
     ensure!(
-        model
-            .proto
-            .trainer_spec
-            .as_ref()
-            .is_some_and(|s| s.model_type() == sentencepiece_model::ModelType::Bpe),
-        "saved native model must be BPE"
+        model.proto.trainer_spec.as_ref().is_some_and(|s| {
+            match expected.sentencepiece.model_type.as_str() {
+                "bpe" => s.model_type() == sentencepiece_model::ModelType::Bpe,
+                "unigram" => s.model_type() == sentencepiece_model::ModelType::Unigram,
+                _ => false,
+            }
+        }),
+        "saved native model type differs from the training request"
     );
     Ok(Some(output))
 }

@@ -49,6 +49,7 @@ fn markdown(evidence: &Evidence<'_>) -> String {
         summary(evidence),
         compression(evidence.evaluation),
         shards(evidence.evaluation),
+        sources(evidence.evaluation),
         interpretation(evidence),
     ]
     .concat()
@@ -154,9 +155,17 @@ fn compression(report: &Report) -> String {
 
 fn shards(report: &Report) -> String {
     let mut text = String::new();
-    text.push_str("## Test-shard breakdown\n\nShards retain the existing source/script hints; no language labels or weights are required. Negative savings are regressions.\n\n| Test shard | Records | BPE tokens | Candidate tokens | Saved | Fallback records |\n|---|---:|---:|---:|---:|---:|\n");
+    text.push_str("## Test-shard breakdown\n\nShards retain the existing source/script hints; no language labels or weights are required. Negative savings are regressions.\n\n| Test shard | Records | BPE tokens | Candidate tokens | Saved | BPE code points/token | Candidate code points/token | Fallback records |\n|---|---:|---:|---:|---:|---:|---:|---:|\n");
     for file in &report.files {
         shard_row(&mut text, &file.input, &file.metrics);
+    }
+    text
+}
+
+fn sources(report: &Report) -> String {
+    let mut text = String::from("\n## Source-group summary\n\nGroups use the source hints retained in prepared shard names, not exact original-file identities. Ratios use summed code points divided by summed tokens, rather than averages of shard ratios.\n\n| Source group | Records | BPE tokens | Candidate tokens | Saved | BPE code points/token | Candidate code points/token | Fallback records |\n|---|---:|---:|---:|---:|---:|---:|---:|\n");
+    for source in &report.sources {
+        shard_row(&mut text, Path::new(&source.source_group), &source.metrics);
     }
     text
 }
@@ -179,11 +188,13 @@ fn shard_row(text: &mut String, path: &Path, metrics: &Metrics) {
         .replace('|', "\\|");
     let counts = &metrics.counts;
     text.push_str(&format!(
-        "| {name} | {} | {} | {} | {}% | {} |\n",
+        "| {name} | {} | {} | {} | {}% | {} | {} | {} |\n",
         counts.records,
         counts.baseline.tokens,
         counts.candidate.tokens,
         value(&metrics.percent_tokens_saved),
+        value(&counts.baseline.codepoints_per_token),
+        value(&counts.candidate.codepoints_per_token),
         counts.candidate.records_with_byte_fallback
     ));
 }

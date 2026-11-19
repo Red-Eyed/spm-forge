@@ -211,6 +211,34 @@ existing in-memory sampling path.
 - `work_dir/trainer_request.json`: replayable trainer request.
 - `work_dir/trainer_output.json`: trainer status and artifact paths.
 
+## Sparse Unigram experiment
+
+`cfg.sparse.json` selects native Unigram with continuous L1 sparse pruning and automatic
+character coverage. It keeps the shared 8,192-piece budget, byte fallback, NFC preparation,
+and the saved train/test reporting workflow. This mode requires the patched SentencePiece
+wheel from the project fork; the original PyPI 0.2.3 wheel rejects `use_sparse_pruning`.
+
+```sh
+just train cfg.sparse.json
+```
+
+To reuse an existing prepared corpus, set the same `output.work_dir`, choose a new
+`output.model_prefix` such as `sparse`, and run `just train-only cfg.sparse.json`.
+Preparation settings and split policy must match the saved manifest. Completed native
+models and reports can be reused; an interrupted native Unigram fit restarts that fit.
+
+The report compares the candidate against equal-budget BPE. It includes code points per
+token for every test shard and source group, token savings, quantiles, fallback usage,
+and reconstruction failures. Source groups are filename-derived hints, not original-file
+provenance. The BPE baseline retains fixed character coverage; this preset tests sparse
+pruning plus automatic character allocation together. Set `auto_character_coverage` to
+`false` to isolate sparse pruning with fixed character coverage.
+
+Sparse pruning optimizes regularized likelihood, so fewer tokens are an experimental
+outcome rather than a guarantee. On a synthetic 512-piece smoke test, it used 18,721 tokens
+versus BPE's 18,205 (2.834% more); reconstruction checks passed. This validates the workflow,
+not a compression recommendation for real multilingual corpora.
+
 ## MinGram training
 
 Select MinGram in the normal training configuration:

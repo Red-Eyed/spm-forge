@@ -2,7 +2,7 @@
 
 Construct ``SentencePieceOptions`` for Python-only training. Its attribute docstrings
 are included in ``model_json_schema()`` alongside defaults and allowed values.
-The schema targets file-based training with the configured SentencePiece Git build; corpus
+The schema targets file-based training with the configured SentencePiece wheel; corpus
 feasibility and file access remain SentencePiece's responsibility.
 """
 
@@ -85,8 +85,10 @@ class SentencePieceOptions(BaseModel):
         default=0.9998, ge=0.98, le=1, allow_inf_nan=False
     )
     """Fraction of corpus character occurrences covered by retained alphabet characters."""
+    use_sparse_pruning: bool = False
+    """Use continuous L1 vocabulary pruning for Unigram; requires the patched trainer."""
     auto_character_coverage: bool = False
-    """Automatically allocate BPE vocabulary slots between characters and subwords; requires byte fallback and empty required_chars."""
+    """Allocate vocabulary slots between characters and subwords; Unigram requires sparse pruning."""
     input_sentence_size: int = Field(default=20000000, ge=0, le=18446744073709551615)
     """Maximum sampled input lines; zero loads all lines, otherwise the value must exceed 100."""
     shuffle_input_sentence: bool = True
@@ -193,6 +195,8 @@ class SentencePieceOptions(BaseModel):
     @model_validator(mode="after")
     def validate_model_options(self) -> Self:
         """Reject incompatible model-specific settings before native training."""
+        if self.use_sparse_pruning and self.model_type != "unigram":
+            raise ValueError("use_sparse_pruning requires a unigram model")
         if self.use_all_vocab and self.model_type not in ("word", "char"):
             raise ValueError("use_all_vocab requires a word or char model")
         if self.seed_sentencepieces_file and self.model_type != "unigram":
@@ -210,10 +214,10 @@ class SentencePieceOptions(BaseModel):
         """Check auto coverage against the capabilities of the installed Python trainer."""
         if not self.auto_character_coverage:
             return self
-        if self.model_type != "bpe":
-            raise ValueError(
-                "Python auto coverage requires bpe; unigram requires the CLI-only use_sparse_pruning flag"
-            )
+        if self.model_type not in ("bpe", "unigram") or (
+            self.model_type == "unigram" and not self.use_sparse_pruning
+        ):
+            raise ValueError("auto_character_coverage requires BPE or sparse Unigram")
         if not self.byte_fallback:
             raise ValueError("auto_character_coverage requires byte_fallback=True")
         if self.required_chars:
@@ -344,6 +348,12 @@ def main() -> int:
     return 0
 
 
+class SparsePruningArgs(TypedDict, total=False):
+    """Optional native keyword omitted for trainers without sparse pruning."""
+
+    use_sparse_pruning: bool
+
+
 def _train(options: SentencePieceOptions | Mapping[str, object]) -> None:
     """Write model and vocabulary files using validated, explicit trainer options.
 
@@ -356,6 +366,9 @@ def _train(options: SentencePieceOptions | Mapping[str, object]) -> None:
             inputs = input_files
         case list(input_files):
             inputs = ",".join(input_files)
+    sparse_options: SparsePruningArgs = {}
+    if options.use_sparse_pruning:
+        sparse_options["use_sparse_pruning"] = True
     spm.SentencePieceTrainer.train(
         input=inputs,
         model_prefix=str(options.model_prefix),
@@ -369,6 +382,7 @@ def _train(options: SentencePieceOptions | Mapping[str, object]) -> None:
         differential_privacy_clipping_threshold=options.differential_privacy_clipping_threshold,
         character_coverage=options.character_coverage,
         auto_character_coverage=options.auto_character_coverage,
+        **sparse_options,
         input_sentence_size=options.input_sentence_size,
         shuffle_input_sentence=options.shuffle_input_sentence,
         seed_sentencepiece_size=options.seed_sentencepiece_size,

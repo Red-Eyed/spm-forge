@@ -138,3 +138,19 @@ paired metrics, bounded batches, byte fallback and unknown rejection, changed op
 identity, corrupt snapshots, incomplete checkpoint files, older seed adoption, and interrupted
 export recovery. These checks establish implementation equivalence on controlled data;
 large-corpus HPC speedups and downstream quality remain unmeasured.
+
+## Sparse Unigram workflow smoke test
+
+The fork's CI-built macOS ARM64 free-threaded Python 3.14 wheel (`0.2.3.post1`)
+trained native sparse Unigram through the normal Rust workflow. The committed synthetic
+`data/train.txt` was split by the standard content-hash policy into 15,212 training
+records and 788 held-out records, at 512 pieces including byte fallback. BPE emitted
+18,205 tokens and sparse Unigram with automatic character coverage emitted 18,721
+(-2.834% savings), or 1.115 versus 1.084 prepared code points per token. Both had zero
+unknown IDs and reconstruction failures. Fallback tokens increased from 45 to 5,636.
+This is a workflow smoke test, not evidence that sparse pruning improves compression.
+
+Markdown and JSON reports now aggregate source hints with ratios computed from summed
+code points and tokens. A regression test uses unequal shard sizes to distinguish this
+from averaging per-shard ratios. The report cache version changes so existing evaluations
+regenerate without repeating preparation or native training.
