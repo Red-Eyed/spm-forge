@@ -48,7 +48,7 @@ struct MingramArgs {
     max_record_bytes: usize,
     #[arg(long, default_value = "cfg.json")]
     config: PathBuf,
-    #[arg(long, default_value = "cfg.json.ocr")]
+    #[arg(long, default_value = "cfg.presets.json")]
     preset_config: PathBuf,
     #[arg(long, default_value_t = default_threads())]
     num_threads: usize,
@@ -76,7 +76,7 @@ struct EvaluateArgs {
 struct TrainArgs {
     #[arg(long, default_value = "cfg.json")]
     config: PathBuf,
-    #[arg(long, default_value = "cfg.json.ocr")]
+    #[arg(long, default_value = "cfg.presets.json")]
     preset_config: PathBuf,
     #[arg(long)]
     train_only: bool,

@@ -125,7 +125,7 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let config = crate::config::load_effective_config(
             &root.join("cfg.json"),
-            &root.join("cfg.json.ocr"),
+            &root.join("cfg.presets.json"),
         )
         .unwrap();
         let input = "cafe\u{0301}\u{00ad}\u{00a0}\u{200b}\u{200d}ﻻ①";

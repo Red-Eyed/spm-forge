@@ -766,7 +766,7 @@ mod tests {
     use super::*;
 
     fn catalog() -> PresetCatalog {
-        serde_json::from_str(include_str!("../cfg.json.ocr")).expect("preset fixture is valid")
+        serde_json::from_str(include_str!("../cfg.presets.json")).expect("preset fixture is valid")
     }
 
     #[test]
@@ -833,9 +833,11 @@ mod tests {
     #[test]
     fn shipped_mingram_example_loads() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let config =
-            load_effective_config(&root.join("cfg.mingram.json"), &root.join("cfg.json.ocr"))
-                .unwrap();
+        let config = load_effective_config(
+            &root.join("cfg.mingram.json"),
+            &root.join("cfg.presets.json"),
+        )
+        .unwrap();
         assert_eq!(
             config.sentencepiece.algorithm,
             TrainingAlgorithm::Mingram {
@@ -945,8 +947,9 @@ mod tests {
     fn checked_in_default_config_loads() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
 
-        let effective = load_effective_config(&root.join("cfg.json"), &root.join("cfg.json.ocr"))
-            .expect("checked-in cfg.json loads with preset catalog");
+        let effective =
+            load_effective_config(&root.join("cfg.json"), &root.join("cfg.presets.json"))
+                .expect("checked-in cfg.json loads with preset catalog");
 
         assert_eq!(effective.preset, "multilingual_mingram");
         assert_eq!(effective.sentencepiece.vocab_size, 8192);

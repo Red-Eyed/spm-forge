@@ -45,7 +45,7 @@ must come from content sniffing and typed repair policy rather than user pre-sor
 
 - Accept a small JSON config that defines corpus location, output location, and preset choice.
   The heavier canonicalization, balancing, validation, and SentencePiece trainer defaults come
-  from `cfg.json.ocr`.
+  from `cfg.presets.json`.
 - Stream input text files, canonicalize each line, write a fixed training corpus, and produce a
   pre/post axis report for the transformations in `09-failure-modes.md`.
 - Keep visible feedback on screen for every long stage: progress bars when totals are known,
@@ -111,7 +111,7 @@ The normal user config should be small:
 }
 ```
 
-The bundled `cfg.json.ocr` file defines named presets. Each shipped preset contains the pipeline
+The bundled `cfg.presets.json` file defines named presets. Each shipped preset contains the pipeline
 thread count plus every canonicalization, balancing, SentencePiece, and validation parameter
 directly so users can switch behavior by changing only `cfg.json.preset`:
 
@@ -181,7 +181,7 @@ directly so users can switch behavior by changing only `cfg.json.preset`:
 }
 ```
 
-The example above is abbreviated for readability; the checked-in `cfg.json.ocr` stores the full
+The example above is abbreviated for readability; the checked-in `cfg.presets.json` stores the full
 field set for every preset.
 
 After preset expansion, the effective config contains the full policy:
