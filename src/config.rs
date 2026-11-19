@@ -911,7 +911,8 @@ mod tests {
             }
         );
         assert_eq!(config.sentencepiece.vocab_size, 8192);
-        assert!(!config.balancing.enabled);
+        assert!(config.balancing.enabled);
+        assert_eq!(config.balancing.mode, BalancingMode::ScriptSample);
     }
 
     #[test]
@@ -937,7 +938,8 @@ mod tests {
 
         assert_eq!(effective.preset, "multilingual_mingram");
         assert_eq!(effective.sentencepiece.vocab_size, 8192);
-        assert!(!effective.balancing.enabled);
+        assert!(effective.balancing.enabled);
+        assert_eq!(effective.balancing.mode, BalancingMode::ScriptSample);
         assert_eq!(
             effective.canonicalization.soft_hyphen,
             SoftHyphenPolicy::Preserve
@@ -1019,7 +1021,8 @@ mod tests {
 
         assert_eq!(effective.preset, "multilingual_mingram");
         assert_eq!(effective.sentencepiece.vocab_size, 8192);
-        assert!(!effective.balancing.enabled);
+        assert!(effective.balancing.enabled);
+        assert_eq!(effective.balancing.mode, BalancingMode::ScriptSample);
         assert_eq!(
             effective.canonicalization.soft_hyphen,
             SoftHyphenPolicy::Preserve

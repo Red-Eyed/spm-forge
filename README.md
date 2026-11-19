@@ -190,10 +190,11 @@ reduce the vocabulary budget explicitly for those runs. Pieces are capped at 16 
 NFC is applied during corpus preparation; exported models use identity normalization, so
 round-trip claims concern prepared text. Full NFC is not automatically embedded in the model.
 
-Default balancing is disabled and preparation streams records without a corpus-wide shuffle.
-Native BPE seed and baseline training each sample at most 1,000,000 training chunks; MinGram
-replays all training chunks. The independent native samples need not be identical. Training a
-matched baseline adds one BPE training run. Explicitly enabled legacy balancing still uses its
+The default multilingual configs enable content-only script sampling, selecting at most
+1,000,000 training records for both candidate and BPE. MinGram replays that saved sample.
+Preparation streams records without a corpus-wide shuffle. Disabling balancing restores
+independent native samples, and MinGram then replays all prepared training chunks.
+Training a matched baseline adds one BPE training run. The legacy OCR presets retain their
 existing in-memory sampling path in `conservative` mode.
 
 ## Outputs

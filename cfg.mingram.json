@@ -9,7 +9,8 @@
     "model_prefix": "tokenizer"
   },
   "balancing": {
-    "enabled": false
+    "enabled": true,
+    "mode": "script_sample"
   },
   "sentencepiece": {
     "model_type": "mingram",
