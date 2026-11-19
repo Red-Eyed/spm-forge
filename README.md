@@ -1,19 +1,22 @@
-# spm-ocr
+# spm-forge
 
 Train a multilingual SentencePiece tokenizer with MinGram compression and held-out evaluation.
 
-This project is for OCR datasets that arrive as real-world dumps: directories, single files,
-archives inside archives, compressed text, mixed scripts, weak path hints, extractor artifacts,
-and uneven source sizes. The goal is to produce a tokenizer training corpus that is repaired,
-logged, and easy to inspect before training. The default uses natural corpus frequencies;
-OCR-specific repair and balancing presets remain available.
+Prepare multilingual text corpora, train shared vocabularies, optimize token counts, and
+compare tokenizers on held-out text. Inputs can be directories, individual files, nested
+archives, or compressed text with mixed scripts and uneven source sizes. Preparation is
+logged, training is resumable, and evaluation produces Markdown and JSON reports.
+
+Use cases include language modeling, multilingual text processing, search, and OCR.
+The default uses natural corpus frequencies; OCR-specific repair and balancing presets
+are available when needed.
 
 ## Why Use It
 
 - Pass one corpus path instead of pre-sorting files by extension or language.
 - Detect text, archives, and compressed files by content rather than filename.
-- Fix OCR-relevant Unicode issues while preserving characters that matter for labels.
-- Split oversized OCR lines into safe chunks, skip only unrepairable lines, and log every action.
+- Apply configurable Unicode canonicalization with NFC preparation by default.
+- Split oversized text records into safe chunks, skip only unrepairable lines, and log every action.
 - Repair line chunks in parallel while writing deterministic corpus outputs.
 - Build several meaningful training corpus files instead of one anonymous bag.
 - Train an 8,192-piece MinGram tokenizer with byte fallback and NFC corpus preparation.
