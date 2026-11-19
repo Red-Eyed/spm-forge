@@ -230,9 +230,35 @@ character coverage. It keeps the shared 8,192-piece budget, byte fallback, NFC p
 and the saved train/test reporting workflow. This mode requires the patched SentencePiece
 wheel from the project fork; the original PyPI 0.2.3 wheel rejects `use_sparse_pruning`.
 
+Edit `corpus.path` in [`cfg.sparse.json`](cfg.sparse.json) to point to your text corpus.
+Its tokenizer settings are explicit:
+
+```json
+{
+  "canonicalization": {
+    "unicode_form": "nfc"
+  },
+  "sentencepiece": {
+    "model_type": "unigram",
+    "vocab_size": 8192,
+    "use_sparse_pruning": true,
+    "auto_character_coverage": true,
+    "byte_fallback": true,
+    "normalization_rule_name": "identity",
+    "add_dummy_prefix": false,
+    "remove_extra_whitespaces": false
+  }
+}
+```
+
 ```sh
+uv sync --locked
 just train cfg.sparse.json
 ```
+
+The default output directory is `runs/sparse-unigram`; the Markdown report is
+`runs/sparse-unigram/reports/tokenizer.md`. NFC applies during corpus preparation;
+the exported model retains identity normalization.
 
 To reuse an existing prepared corpus, set the same `output.work_dir`, choose a new
 `output.model_prefix` such as `sparse`, and run `just train-only cfg.sparse.json`.
