@@ -652,6 +652,12 @@ impl PartialSentencePieceConfig {
 
     fn require(self) -> Result<SentencePieceConfig, ConfigError> {
         let model_type = require_field(self.model_type, "sentencepiece.model_type")?;
+        if self.mingram.is_some() && model_type != ModelType::Mingram {
+            return Err(ConfigError::InvalidPresetField {
+                field: "sentencepiece.mingram",
+                reason: "MinGram options require model_type mingram",
+            });
+        }
         let sparse = self.use_sparse_pruning.unwrap_or(false);
         let auto = self.auto_character_coverage.unwrap_or(false);
         if (sparse || auto) && model_type != ModelType::Unigram {
@@ -671,15 +677,7 @@ impl PartialSentencePieceConfig {
                 use_sparse_pruning: sparse,
                 auto_character_coverage: auto,
             },
-            ModelType::Bpe => {
-                if self.mingram.is_some() {
-                    return Err(ConfigError::InvalidPresetField {
-                        field: "sentencepiece.mingram",
-                        reason: "MinGram options require model_type mingram",
-                    });
-                }
-                TrainingAlgorithm::Bpe
-            }
+            ModelType::Bpe => TrainingAlgorithm::Bpe,
             ModelType::Mingram => TrainingAlgorithm::Mingram {
                 mingram: self.mingram.unwrap_or_default(),
             },
@@ -836,6 +834,13 @@ mod tests {
         assert!(config.clone().require().is_err());
         config.byte_fallback = Some(true);
         config.model_type = Some(ModelType::Bpe);
+        assert!(config.require().is_err());
+        let mut config = catalog()
+            .presets
+            .remove("multilingual_sparse_unigram")
+            .unwrap()
+            .sentencepiece;
+        config.mingram = Some(MingramConfig::default());
         assert!(config.require().is_err());
     }
 
