@@ -210,7 +210,11 @@ existing in-memory sampling path in `conservative` mode.
 - `work_dir/reports/tokenizer.md`: held-out decision report.
 - `work_dir/reports/tokenizer.json`: structured evaluation and provenance.
 - `work_dir/trainer_request.json`: replayable trainer request.
-- `work_dir/trainer_output.json`: trainer status and artifact paths.
+- `work_dir/trainer_output.json`: trainer status, artifact paths, and captured stdout/stderr.
+
+If SentencePiece fails, the terminal message prints this JSON file's path. Read its
+`stderr` array for native errors and the Python traceback. Seed and baseline trainers
+write their reports in their respective output directories.
 
 ## SentencePiece wheel source
 

@@ -102,8 +102,8 @@ pub enum TrainerError {
         program: String,
         source: std::io::Error,
     },
-    #[error("trainer failed with status {status}")]
-    Failed { status: String },
+    #[error("trainer failed with status {status}; see {log} for captured stderr/stdout and the error traceback")]
+    Failed { status: String, log: PathBuf },
     #[error("interrupted")]
     Interrupted(#[from] Cancelled),
 }
@@ -199,9 +199,13 @@ pub fn train_sentencepiece(
     write_json(&paths.output, &output)?;
 
     if !exit_status.success() {
-        stage.finish(format!("SentencePiece failed after {elapsed_ms}ms"));
+        stage.finish(format!(
+            "SentencePiece failed after {elapsed_ms}ms; see {} for captured stderr/stdout",
+            paths.output.display()
+        ));
         return Err(TrainerError::Failed {
             status: exit_status.to_string(),
+            log: paths.output.clone(),
         });
     }
 
@@ -553,5 +557,32 @@ pub(crate) mod tests {
             request.output.vocab,
             PathBuf::from("runs/demo/ocr_tokenizer.vocab")
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn failure_points_to_saved_diagnostics() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let mut config = config(temp.path());
+        config.sentencepiece.python.runner = "sh".into();
+        config.sentencepiece.python.args = vec![
+            "-c".into(),
+            "printf 'vocabulary budget exceeded\\n' >&2; exit 7".into(),
+        ];
+        let paths = TrainerPaths::from_config(&config);
+        let error = train_sentencepiece(
+            &config,
+            &[],
+            &ProgressReporter::silent(),
+            &CancellationToken::default(),
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains(&paths.output.display().to_string()));
+        let output: TrainerOutput =
+            serde_json::from_slice(&fs::read(&paths.output).unwrap()).unwrap();
+        assert_eq!(output.status, TrainerStatus::Failed);
+        assert_eq!(output.stderr, vec!["vocabulary budget exceeded"]);
     }
 }
