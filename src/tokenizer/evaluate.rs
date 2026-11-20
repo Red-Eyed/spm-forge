@@ -109,6 +109,12 @@ pub struct FileReport {
 }
 
 #[derive(Debug, Serialize)]
+pub struct SourceReport {
+    pub source_group: String,
+    pub metrics: Metrics,
+}
+
+#[derive(Debug, Serialize)]
 pub struct Report {
     pub baseline_model_blake3: String,
     pub candidate_model_blake3: String,
@@ -117,6 +123,7 @@ pub struct Report {
     pub same_vocab_size: bool,
     pub normalization_matches: bool,
     pub files: Vec<FileReport>,
+    pub sources: Vec<SourceReport>,
     pub total: Metrics,
 }
 
@@ -178,6 +185,7 @@ pub fn compare_with_options(
         .progress
         .stage_bar("evaluating held-out tokenizer pairs", bytes);
     let mut files = Vec::new();
+    let mut sources: BTreeMap<String, Counts> = BTreeMap::new();
     let mut total = Counts::default();
     for path in inputs {
         let counts = compare_file(
@@ -190,6 +198,7 @@ pub fn compare_with_options(
             cancellation,
         )?;
         total.add(&counts);
+        sources.entry(source_group(path)).or_default().add(&counts);
         files.push(FileReport {
             input: path.clone(),
             metrics: counts.into(),
@@ -204,6 +213,13 @@ pub fn compare_with_options(
         same_vocab_size: baseline.proto.pieces.len() == candidate.proto.pieces.len(),
         normalization_matches: true,
         files,
+        sources: sources
+            .into_iter()
+            .map(|(source_group, counts)| SourceReport {
+                source_group,
+                metrics: Metrics::from(counts),
+            })
+            .collect(),
         total: total.into(),
     })
 }
@@ -314,6 +330,14 @@ impl TokenStats {
         }
         Ratio::default()
     }
+}
+
+/// Prepared shards retain a source hint, not original-file provenance.
+fn source_group(path: &Path) -> String {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    name.split_once("-source_")
+        .and_then(|(_, suffix)| suffix.split_once("-len_"))
+        .map_or_else(|| name.to_string(), |(source, _)| source.to_owned())
 }
 
 impl Counts {

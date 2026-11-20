@@ -27,6 +27,10 @@ pub struct SentencePieceArgs {
     pub input: Vec<PathBuf>,
     pub model_prefix: PathBuf,
     pub model_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub use_sparse_pruning: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_character_coverage: Option<bool>,
     pub vocab_size: u32,
     pub character_coverage: f64,
     pub byte_fallback: bool,
@@ -71,7 +75,7 @@ pub enum TrainerStatus {
 
 #[derive(Debug, Error)]
 pub enum TrainerError {
-    #[error("the Python trainer accepts BPE only; use the training workflow for MinGram")]
+    #[error("the Python trainer accepts BPE and Unigram; use the training workflow for MinGram")]
     UnsupportedAlgorithm,
     #[error("failed to create directory {path}: {source}")]
     CreateDir {
@@ -98,8 +102,8 @@ pub enum TrainerError {
         program: String,
         source: std::io::Error,
     },
-    #[error("trainer failed with status {status}")]
-    Failed { status: String },
+    #[error("trainer failed with status {status}; see {log} for captured stderr/stdout and the error traceback")]
+    Failed { status: String, log: PathBuf },
     #[error("interrupted")]
     Interrupted(#[from] Cancelled),
 }
@@ -110,7 +114,10 @@ pub fn train_sentencepiece(
     progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<TrainerOutput, TrainerError> {
-    if !matches!(config.sentencepiece.algorithm, TrainingAlgorithm::Bpe) {
+    if matches!(
+        config.sentencepiece.algorithm,
+        TrainingAlgorithm::Mingram { .. }
+    ) {
         return Err(TrainerError::UnsupportedAlgorithm);
     }
     let paths = TrainerPaths::from_config(config);
@@ -192,9 +199,13 @@ pub fn train_sentencepiece(
     write_json(&paths.output, &output)?;
 
     if !exit_status.success() {
-        stage.finish(format!("SentencePiece failed after {elapsed_ms}ms"));
+        stage.finish(format!(
+            "SentencePiece failed after {elapsed_ms}ms; see {} for captured stderr/stdout",
+            paths.output.display()
+        ));
         return Err(TrainerError::Failed {
             status: exit_status.to_string(),
+            log: paths.output.clone(),
         });
     }
 
@@ -280,6 +291,19 @@ impl SentencePieceArgs {
             input: corpus_paths.to_vec(),
             model_prefix: paths.model_prefix.clone(),
             model_type: model_type(sentencepiece),
+            use_sparse_pruning: match sentencepiece.algorithm {
+                TrainingAlgorithm::Unigram {
+                    use_sparse_pruning, ..
+                } => Some(use_sparse_pruning),
+                _ => None,
+            },
+            auto_character_coverage: match sentencepiece.algorithm {
+                TrainingAlgorithm::Unigram {
+                    auto_character_coverage,
+                    ..
+                } => Some(auto_character_coverage),
+                _ => None,
+            },
             vocab_size: sentencepiece.vocab_size,
             character_coverage: sentencepiece.character_coverage,
             byte_fallback: sentencepiece.byte_fallback,
@@ -408,6 +432,7 @@ fn with_extension(path: &Path, extension: &str) -> PathBuf {
 fn model_type(config: &SentencePieceConfig) -> String {
     match config.algorithm {
         TrainingAlgorithm::Bpe => "bpe",
+        TrainingAlgorithm::Unigram { .. } => "unigram",
         TrainingAlgorithm::Mingram { .. } => "mingram",
     }
     .to_owned()
@@ -532,5 +557,32 @@ pub(crate) mod tests {
             request.output.vocab,
             PathBuf::from("runs/demo/ocr_tokenizer.vocab")
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn failure_points_to_saved_diagnostics() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let mut config = config(temp.path());
+        config.sentencepiece.python.runner = "sh".into();
+        config.sentencepiece.python.args = vec![
+            "-c".into(),
+            "printf 'vocabulary budget exceeded\\n' >&2; exit 7".into(),
+        ];
+        let paths = TrainerPaths::from_config(&config);
+        let error = train_sentencepiece(
+            &config,
+            &[],
+            &ProgressReporter::silent(),
+            &CancellationToken::default(),
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains(&paths.output.display().to_string()));
+        let output: TrainerOutput =
+            serde_json::from_slice(&fs::read(&paths.output).unwrap()).unwrap();
+        assert_eq!(output.status, TrainerStatus::Failed);
+        assert_eq!(output.stderr, vec!["vocabulary budget exceeded"]);
     }
 }

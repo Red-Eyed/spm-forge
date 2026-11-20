@@ -9,6 +9,7 @@ mod corpus_split;
 mod normalize;
 mod progress;
 mod repair;
+mod script_sampling;
 mod tokenizer;
 mod trainer;
 mod training_workflow;

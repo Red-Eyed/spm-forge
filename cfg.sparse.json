@@ -1,0 +1,32 @@
+{
+  "preset": "multilingual_sparse_unigram",
+  "num_threads": 16,
+  "corpus": {
+    "path": "data/raw-corpus"
+  },
+  "output": {
+    "work_dir": "runs/sparse-unigram",
+    "model_prefix": "tokenizer"
+  },
+  "canonicalization": {
+    "unicode_form": "nfc"
+  },
+  "balancing": {
+    "enabled": true,
+    "mode": "script_sample"
+  },
+  "sentencepiece": {
+    "model_type": "unigram",
+    "vocab_size": 8192,
+    "use_sparse_pruning": true,
+    "auto_character_coverage": true,
+    "byte_fallback": true,
+    "normalization_rule_name": "identity",
+    "add_dummy_prefix": false,
+    "remove_extra_whitespaces": false
+  },
+  "evaluation": {
+    "test_fraction": 0.05,
+    "split_seed": 42
+  }
+}

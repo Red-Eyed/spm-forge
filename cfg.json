@@ -8,6 +8,10 @@
     "work_dir": "runs/mingram",
     "model_prefix": "tokenizer"
   },
+  "balancing": {
+    "enabled": true,
+    "mode": "script_sample"
+  },
   "evaluation": {
     "test_fraction": 0.05,
     "split_seed": 42

@@ -217,6 +217,7 @@ pub struct PartialBalancingConfig {
 #[serde(rename_all = "snake_case")]
 pub enum BalancingMode {
     Conservative,
+    ScriptSample,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -261,6 +262,10 @@ pub struct PartialSentencePieceConfig {
     pub python: Option<PythonTrainerConfig>,
     #[serde(default)]
     pub model_type: Option<ModelType>,
+    #[serde(default)]
+    pub use_sparse_pruning: Option<bool>,
+    #[serde(default)]
+    pub auto_character_coverage: Option<bool>,
     #[serde(default)]
     pub mingram: Option<MingramConfig>,
     #[serde(default)]
@@ -313,6 +318,7 @@ pub struct PythonTrainerConfig {
 #[serde(rename_all = "snake_case")]
 pub enum ModelType {
     Bpe,
+    Unigram,
     Mingram,
 }
 
@@ -320,7 +326,13 @@ pub enum ModelType {
 #[serde(tag = "model_type", rename_all = "snake_case")]
 pub enum TrainingAlgorithm {
     Bpe,
-    Mingram { mingram: MingramConfig },
+    Unigram {
+        use_sparse_pruning: bool,
+        auto_character_coverage: bool,
+    },
+    Mingram {
+        mingram: MingramConfig,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -595,6 +607,11 @@ impl PartialSentencePieceConfig {
         replace_if_some(&mut self.trainer, other.trainer);
         replace_if_some(&mut self.python, other.python.clone());
         replace_if_some(&mut self.model_type, other.model_type);
+        replace_if_some(&mut self.use_sparse_pruning, other.use_sparse_pruning);
+        replace_if_some(
+            &mut self.auto_character_coverage,
+            other.auto_character_coverage,
+        );
         replace_if_some(&mut self.mingram, other.mingram);
         replace_if_some(&mut self.vocab_size, other.vocab_size);
         replace_if_some(&mut self.character_coverage, other.character_coverage);
@@ -635,16 +652,33 @@ impl PartialSentencePieceConfig {
     }
 
     fn require(self) -> Result<SentencePieceConfig, ConfigError> {
-        let algorithm = match require_field(self.model_type, "sentencepiece.model_type")? {
-            ModelType::Bpe => {
-                if self.mingram.is_some() {
-                    return Err(ConfigError::InvalidPresetField {
-                        field: "sentencepiece.mingram",
-                        reason: "MinGram options require model_type mingram",
-                    });
-                }
-                TrainingAlgorithm::Bpe
-            }
+        let model_type = require_field(self.model_type, "sentencepiece.model_type")?;
+        if self.mingram.is_some() && model_type != ModelType::Mingram {
+            return Err(ConfigError::InvalidPresetField {
+                field: "sentencepiece.mingram",
+                reason: "MinGram options require model_type mingram",
+            });
+        }
+        let sparse = self.use_sparse_pruning.unwrap_or(false);
+        let auto = self.auto_character_coverage.unwrap_or(false);
+        if (sparse || auto) && model_type != ModelType::Unigram {
+            return Err(ConfigError::InvalidPresetField {
+                field: "sentencepiece.use_sparse_pruning",
+                reason: "sparse options require model_type unigram",
+            });
+        }
+        if auto && (!sparse || self.byte_fallback != Some(true)) {
+            return Err(ConfigError::InvalidPresetField {
+                field: "sentencepiece.auto_character_coverage",
+                reason: "Unigram auto coverage requires sparse pruning and byte fallback",
+            });
+        }
+        let algorithm = match model_type {
+            ModelType::Unigram => TrainingAlgorithm::Unigram {
+                use_sparse_pruning: sparse,
+                auto_character_coverage: auto,
+            },
+            ModelType::Bpe => TrainingAlgorithm::Bpe,
             ModelType::Mingram => TrainingAlgorithm::Mingram {
                 mingram: self.mingram.unwrap_or_default(),
             },
@@ -780,6 +814,38 @@ mod tests {
     }
 
     #[test]
+    fn sparse_unigram_validates_auto_coverage_requirements() {
+        let mut config = catalog()
+            .presets
+            .remove("multilingual_sparse_unigram")
+            .unwrap()
+            .sentencepiece;
+        let effective = config.clone().require().unwrap();
+        assert_eq!(
+            effective.algorithm,
+            TrainingAlgorithm::Unigram {
+                use_sparse_pruning: true,
+                auto_character_coverage: true,
+            }
+        );
+        config.use_sparse_pruning = Some(false);
+        assert!(config.clone().require().is_err());
+        config.use_sparse_pruning = Some(true);
+        config.byte_fallback = Some(false);
+        assert!(config.clone().require().is_err());
+        config.byte_fallback = Some(true);
+        config.model_type = Some(ModelType::Bpe);
+        assert!(config.require().is_err());
+        let mut config = catalog()
+            .presets
+            .remove("multilingual_sparse_unigram")
+            .unwrap()
+            .sentencepiece;
+        config.mingram = Some(MingramConfig::default());
+        assert!(config.require().is_err());
+    }
+
+    #[test]
     fn mingram_selection_defaults_and_options_are_typed() {
         let mut config = catalog()
             .presets
@@ -845,7 +911,8 @@ mod tests {
             }
         );
         assert_eq!(config.sentencepiece.vocab_size, 8192);
-        assert!(!config.balancing.enabled);
+        assert!(config.balancing.enabled);
+        assert_eq!(config.balancing.mode, BalancingMode::ScriptSample);
     }
 
     #[test]
@@ -871,7 +938,8 @@ mod tests {
 
         assert_eq!(effective.preset, "multilingual_mingram");
         assert_eq!(effective.sentencepiece.vocab_size, 8192);
-        assert!(!effective.balancing.enabled);
+        assert!(effective.balancing.enabled);
+        assert_eq!(effective.balancing.mode, BalancingMode::ScriptSample);
         assert_eq!(
             effective.canonicalization.soft_hyphen,
             SoftHyphenPolicy::Preserve
@@ -953,7 +1021,8 @@ mod tests {
 
         assert_eq!(effective.preset, "multilingual_mingram");
         assert_eq!(effective.sentencepiece.vocab_size, 8192);
-        assert!(!effective.balancing.enabled);
+        assert!(effective.balancing.enabled);
+        assert_eq!(effective.balancing.mode, BalancingMode::ScriptSample);
         assert_eq!(
             effective.canonicalization.soft_hyphen,
             SoftHyphenPolicy::Preserve

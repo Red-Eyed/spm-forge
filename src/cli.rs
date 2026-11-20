@@ -492,7 +492,7 @@ fn train_sentencepiece(
     let split = crate::corpus_split::SplitManifest::load(
         &config.output.work_dir.join("reports/split.json"),
         &config.evaluation,
-        &preparation_hash(config)?,
+        &crate::corpus_split::preparation_hash(config)?,
         progress,
         cancellation,
     )?;
@@ -502,15 +502,6 @@ fn train_sentencepiece(
     );
     crate::training_workflow::train_and_report(config, &split, progress, cancellation)
         .context("could not train SentencePiece")
-}
-
-fn preparation_hash(config: &EffectiveConfig) -> Result<String> {
-    let bytes = serde_json::to_vec(&(
-        &config.canonicalization,
-        &config.balancing,
-        config.sentencepiece.max_sentence_length,
-    ))?;
-    Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
 fn save_split(
@@ -525,7 +516,7 @@ fn save_split(
         &balance.training_files,
         &tests,
         config.evaluation.clone(),
-        preparation_hash(config)?,
+        crate::corpus_split::preparation_hash(config)?,
         crate::corpus_split::SourceRecords {
             training: repair.training_records,
             test: repair.test_records,

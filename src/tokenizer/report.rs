@@ -7,7 +7,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 use super::evaluate::{Metrics, Ratio, Report};
-use crate::config::EffectiveConfig;
+use crate::config::{BalancingMode, EffectiveConfig};
 use crate::corpus_split::SplitManifest;
 
 #[derive(Serialize)]
@@ -17,6 +17,7 @@ struct Evidence<'a> {
     baseline_model: &'a Path,
     candidate_model: &'a Path,
     evaluation: &'a Report,
+    script_sample: Option<crate::script_sampling::Report>,
 }
 
 pub fn write(
@@ -34,6 +35,15 @@ pub fn write(
         baseline_model: baseline,
         candidate_model: candidate,
         evaluation,
+        script_sample: if config.balancing.enabled
+            && config.balancing.mode == BalancingMode::ScriptSample
+        {
+            Some(serde_json::from_slice(&fs::read(
+                directory.join("script_sample.json"),
+            )?)?)
+        } else {
+            None
+        },
     };
     fs::write(
         directory.join("tokenizer.json"),
@@ -47,11 +57,32 @@ pub fn write(
 fn markdown(evidence: &Evidence<'_>) -> String {
     [
         summary(evidence),
+        sampling(evidence),
         compression(evidence.evaluation),
         shards(evidence.evaluation),
+        sources(evidence.evaluation),
         interpretation(evidence),
     ]
     .concat()
+}
+
+fn sampling(evidence: &Evidence<'_>) -> String {
+    let Some(sample) = &evidence.script_sample else {
+        return String::new();
+    };
+    let mut text = format!("## Training sample by script\n\n{} training records selected using square-root code-point allocation, capped by available data. Intact records make realized code-point shares approximate. Filenames and source labels do not affect classification or quotas. Both candidate and BPE use this exact sample with native resampling disabled. Held-out records are unchanged. Seed: {}.\n\n| Script | Input records | Input code points | Selected records | Selected code points |\n|---|---:|---:|---:|---:|\n", sample.sampled_records, sample.seed);
+    for group in &sample.groups {
+        text.push_str(&format!(
+            "| {} | {} | {} | {} | {} |\n",
+            group.script,
+            group.input_records,
+            group.input_codepoints,
+            group.sampled_records,
+            group.sampled_codepoints
+        ));
+    }
+    text.push('\n');
+    text
 }
 
 fn summary(evidence: &Evidence<'_>) -> String {
@@ -154,9 +185,17 @@ fn compression(report: &Report) -> String {
 
 fn shards(report: &Report) -> String {
     let mut text = String::new();
-    text.push_str("## Test-shard breakdown\n\nShards retain the existing source/script hints; no language labels or weights are required. Negative savings are regressions.\n\n| Test shard | Records | BPE tokens | Candidate tokens | Saved | Fallback records |\n|---|---:|---:|---:|---:|---:|\n");
+    text.push_str("## Test-shard breakdown\n\nShards retain the existing source/script hints; no language labels or weights are required. Negative savings are regressions.\n\n| Test shard | Records | BPE tokens | Candidate tokens | Saved | BPE code points/token | Candidate code points/token | Fallback records |\n|---|---:|---:|---:|---:|---:|---:|---:|\n");
     for file in &report.files {
         shard_row(&mut text, &file.input, &file.metrics);
+    }
+    text
+}
+
+fn sources(report: &Report) -> String {
+    let mut text = String::from("\n## Source-group summary\n\nGroups use the source hints retained in prepared shard names, not exact original-file identities. Ratios use summed code points divided by summed tokens, rather than averages of shard ratios.\n\n| Source group | Records | BPE tokens | Candidate tokens | Saved | BPE code points/token | Candidate code points/token | Fallback records |\n|---|---:|---:|---:|---:|---:|---:|---:|\n");
+    for source in &report.sources {
+        shard_row(&mut text, Path::new(&source.source_group), &source.metrics);
     }
     text
 }
@@ -166,7 +205,12 @@ fn interpretation(evidence: &Evidence<'_>) -> String {
     let mut text = String::new();
     text.push_str("\n## Interpretation and reproducibility\n\nToken savings are measured on the saved held-out partition, not the training corpus. Byte tokens count individually. Code points per token is a character-to-token compression metric, not a guarantee of comparable linguistic information across scripts. UTF-8 byte width is not used as the primary quality score.\n\n");
     text.push_str("NFC preparation changes code-point sequences when necessary. Round trips here refer to prepared test text, not the untouched raw source. The exported model retains its SentencePiece normalization settings; corpus-side NFC is not automatically embedded as full Unicode NFC.\n\n");
-    text.push_str(&format!("BPE input sampling limit: {} records. Baseline and seed training use only the training partition; native sampling is governed by the recorded configuration. No test record is used to fit either model. This is one training run, not a statistical robustness study or a downstream accuracy/latency benchmark.\n\n", evidence.config.sentencepiece.input_sentence_size));
+    if evidence.script_sample.is_some() {
+        text.push_str("Native BPE and Unigram input sampling is disabled: both use the complete saved script-balanced sample. No test record is used to fit either model. This is one training run, not a statistical robustness study or a downstream accuracy/latency benchmark.\n\n");
+    } else {
+        text.push_str(&format!("BPE input sampling limit: {} records. Baseline and seed training use only the training partition; native sampling is governed by the recorded configuration. No test record is used to fit either model. This is one training run, not a statistical robustness study or a downstream accuracy/latency benchmark.\n\n", evidence.config.sentencepiece.input_sentence_size));
+    }
+
     text.push_str(&format!("Candidate BLAKE3: `{}`. Baseline BLAKE3: `{}`.\n\nSee [structured metrics](tokenizer.json), [saved partition](split.json), and `effective_config.json` in the work directory.\n", report.candidate_model_blake3, report.baseline_model_blake3));
     text
 }
@@ -179,11 +223,13 @@ fn shard_row(text: &mut String, path: &Path, metrics: &Metrics) {
         .replace('|', "\\|");
     let counts = &metrics.counts;
     text.push_str(&format!(
-        "| {name} | {} | {} | {} | {}% | {} |\n",
+        "| {name} | {} | {} | {} | {}% | {} | {} | {} |\n",
         counts.records,
         counts.baseline.tokens,
         counts.candidate.tokens,
         value(&metrics.percent_tokens_saved),
+        value(&counts.baseline.codepoints_per_token),
+        value(&counts.candidate.codepoints_per_token),
         counts.candidate.records_with_byte_fallback
     ));
 }

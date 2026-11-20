@@ -708,3 +708,37 @@ fn parallel_counting_preserves_byte_fallback_and_rejects_unknowns() {
     )
     .is_err());
 }
+
+#[test]
+fn source_groups_sum_counts_before_computing_compression() {
+    let temp = TempDir::new().unwrap();
+    let first = temp
+        .path()
+        .join("shard-text-source_demo-len_short-part_1.txt");
+    let second = temp
+        .path()
+        .join("shard-text-source_demo-len_long-part_2.txt");
+    fs::write(&first, "ab\n").unwrap();
+    fs::write(&second, "bbb\n").unwrap();
+    let baseline = model(&["a", "b", "ba"]);
+    let candidate = model(&["a", "b", "ab"]);
+    let report = evaluate::compare(
+        &baseline,
+        &candidate,
+        &[first, second],
+        64,
+        true,
+        &CancellationToken::default(),
+    )
+    .unwrap();
+    assert_eq!(report.sources.len(), 1);
+    let source = &report.sources[0];
+    assert_eq!(source.source_group, "demo");
+    assert_eq!(source.metrics.counts.records, 2);
+    assert_eq!(source.metrics.counts.text_codepoints, 5);
+    assert_eq!(source.metrics.counts.candidate.tokens, 4);
+    assert_eq!(
+        source.metrics.counts.candidate.codepoints_per_token,
+        Ratio::Defined { value: 1.25 }
+    );
+}

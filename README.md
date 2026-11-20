@@ -8,7 +8,7 @@ archives, or compressed text with mixed scripts and uneven source sizes. Prepara
 logged, training is resumable, and evaluation produces Markdown and JSON reports.
 
 Use cases include language modeling, multilingual text processing, search, and OCR.
-The default uses natural corpus frequencies; OCR-specific repair and balancing presets
+The default uses content-only script sampling; OCR-specific repair and balancing presets
 are available when needed.
 
 ## Why Use It
@@ -156,8 +156,8 @@ those defaults, so the Rust OCR presets still select their configured vocabulary
 For a Python-only experiment, call `_train` with `input` and `model_prefix`, or replay an
 edited `trainer_request.json` with `uv run python -m spm_ocr_train_bridge <request.json>`.
 The Python fallback vocabulary size is 8192; other fallback choices use OCR settings
-where applicable and SentencePiece 0.2.2 defaults otherwise.
-`auto_character_coverage` is not supported by the currently available 0.2.2 wheel.
+where applicable and SentencePiece 0.2.3 defaults otherwise.
+The patched release wheel exposes sparse Unigram options through TrainerSpec.
 
 ## Held-out evaluation
 
@@ -190,11 +190,12 @@ reduce the vocabulary budget explicitly for those runs. Pieces are capped at 16 
 NFC is applied during corpus preparation; exported models use identity normalization, so
 round-trip claims concern prepared text. Full NFC is not automatically embedded in the model.
 
-Default balancing is disabled and preparation streams records without a corpus-wide shuffle.
-Native BPE seed and baseline training each sample at most 1,000,000 training chunks; MinGram
-replays all training chunks. The independent native samples need not be identical. Training a
-matched baseline adds one BPE training run. Explicitly enabled legacy balancing still uses its
-existing in-memory sampling path.
+The default multilingual configs enable content-only script sampling, selecting at most
+1,000,000 training records for both candidate and BPE. MinGram replays that saved sample.
+Preparation streams records without a corpus-wide shuffle. Disabling balancing restores
+independent native samples, and MinGram then replays all prepared training chunks.
+Training a matched baseline adds one BPE training run. The legacy OCR presets retain their
+existing in-memory sampling path in `conservative` mode.
 
 ## Outputs
 
@@ -209,7 +210,117 @@ existing in-memory sampling path.
 - `work_dir/reports/tokenizer.md`: held-out decision report.
 - `work_dir/reports/tokenizer.json`: structured evaluation and provenance.
 - `work_dir/trainer_request.json`: replayable trainer request.
-- `work_dir/trainer_output.json`: trainer status and artifact paths.
+- `work_dir/trainer_output.json`: trainer status, artifact paths, and captured stdout/stderr.
+
+If SentencePiece fails, the terminal message prints this JSON file's path. Read its
+`stderr` array for native errors and the Python traceback. Seed and baseline trainers
+write their reports in their respective output directories.
+
+## SentencePiece wheel source
+
+`uv sync --locked` installs `sentencepiece==0.2.3.post1` exclusively from the
+[spm-forge SentencePiece release](https://github.com/Red-Eyed/sentencepiece/releases/tag/spmforge-v0.2.3.post1).
+The explicit flat index in `pyproject.toml` selects that release only for SentencePiece;
+other dependencies retain their existing source. `uv.lock` pins wheel URLs and SHA-256
+hashes, and `no-build-package` prevents a SentencePiece source-build fallback.
+
+Prebuilt wheels support CPython 3.11–3.14 (including free-threaded 3.14), Linux x86_64
+with glibc 2.27+, and macOS ARM64 with macOS 11+. Unsupported Python/platform combinations
+fail installation rather than compiling SentencePiece. No local fork checkout is required.
+
+## Sparse Unigram experiment
+
+`cfg.sparse.json` selects native Unigram with continuous L1 sparse pruning and automatic
+character coverage. It keeps the shared 8,192-piece budget, byte fallback, NFC preparation,
+and the saved train/test reporting workflow. This mode requires the patched SentencePiece
+wheel from the project fork; the original PyPI 0.2.3 wheel rejects `use_sparse_pruning`.
+
+Edit `corpus.path` in [`cfg.sparse.json`](cfg.sparse.json) to point to your text corpus.
+Its tokenizer settings are explicit:
+
+```json
+{
+  "canonicalization": {
+    "unicode_form": "nfc"
+  },
+  "balancing": {
+    "enabled": true,
+    "mode": "script_sample"
+  },
+  "sentencepiece": {
+    "model_type": "unigram",
+    "vocab_size": 8192,
+    "use_sparse_pruning": true,
+    "auto_character_coverage": true,
+    "byte_fallback": true,
+    "normalization_rule_name": "identity",
+    "add_dummy_prefix": false,
+    "remove_extra_whitespaces": false
+  }
+}
+```
+
+```sh
+uv sync --locked
+just train cfg.sparse.json
+```
+
+The default output directory is `runs/sparse-unigram`; the Markdown report is
+`runs/sparse-unigram/reports/tokenizer.md`. NFC applies during corpus preparation;
+the exported model retains identity normalization.
+
+To reuse an existing prepared corpus, set the same `output.work_dir`, choose a new
+`output.model_prefix` such as `sparse`, and run `just train-only cfg.sparse.json`.
+Preparation settings and split policy must match the saved manifest. Completed native
+models and reports can be reused; an interrupted native Unigram fit restarts that fit.
+
+### Content-only script sampling
+
+The sparse preset enables `balancing.mode: "script_sample"`. Groups come only from
+Unicode script properties of the text; filenames, directory names, language hints,
+and source groups do not affect quotas or random seeds. All Latin text shares one
+group. Records with multiple strong scripts use `mixed`; records without a strong
+script use `common`. Common/inherited characters do not create additional scripts.
+Their code points still count toward the record's total length.
+
+The sampler allocates expected code-point mass in proportion to the square root of
+each group's code-point count. It converts that allocation to record quotas using
+mean record lengths, caps quotas at available records, and preserves at least one
+record per group. Records stay intact, so realized character proportions are
+approximate and reported. There is no duplication or per-language weighting.
+If the budget covers the entire corpus, all records are retained unchanged.
+
+The record budget is the smaller of `balancing.total_lines` and a positive
+`sentencepiece.input_sentence_size`; if native input size is zero, only the former
+limit applies. The sparse defaults therefore select at most 1,000,000 records.
+`balancing.shuffle_seed` controls deterministic selection. The legacy `alpha`,
+`hierarchy`, and conservative floor settings do not control this mode.
+
+Two sequential training-data passes count and select records, with bounded parallel
+classification batches and no corpus-sized record/index reservoir. Both trainers
+read the exact same saved sample with native sampling disabled. The held-out corpus
+is not sampled. `reports/script_sample.json` and the tokenizer Markdown report show
+input/selected records and code points for each script. Sample census and selection
+checkpoint after each input file; interrupted files repeat, completed files are
+reused after checksum verification. A new sampling budget/seed uses a distinct
+sample cache; changed model inputs still require a new model prefix.
+
+`train-only` can enable script sampling on a previously prepared **unbalanced** corpus
+without repeating repair, provided the other saved preparation settings match.
+Previously resampled conservative corpora require fresh preparation. Set
+`balancing.enabled` to `false` to retain the original native sampling behavior.
+
+The report compares the candidate against equal-budget BPE. It includes code points per
+token for every test shard and source group, token savings, quantiles, fallback usage,
+and reconstruction failures. Source groups are filename-derived hints, not original-file
+provenance. The BPE baseline retains fixed character coverage; this preset tests sparse
+pruning plus automatic character allocation together. Set `auto_character_coverage` to
+`false` to isolate sparse pruning with fixed character coverage.
+
+Sparse pruning optimizes regularized likelihood, so fewer tokens are an experimental
+outcome rather than a guarantee. Before script balancing was added, a synthetic 512-piece smoke test used 18,721 tokens
+versus BPE's 18,205 (2.834% more); reconstruction checks passed. This validates the workflow,
+not a compression recommendation for real multilingual corpora.
 
 ## MinGram training
 

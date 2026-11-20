@@ -12,6 +12,21 @@ use crate::cancel::CancellationToken;
 use crate::config::EvaluationConfig;
 use crate::progress::{ProgressReporter, StageProgress};
 
+/// Script sampling is a trainer input transformation; prepared text stays unweighted.
+/// Normalizing its mode preserves compatibility with existing unbalanced manifests.
+pub fn preparation_hash(config: &crate::config::EffectiveConfig) -> Result<String> {
+    let mut balancing = config.balancing.clone();
+    if balancing.mode == crate::config::BalancingMode::ScriptSample {
+        balancing.enabled = false;
+        balancing.mode = crate::config::BalancingMode::Conservative;
+    }
+    crate::tokenizer::checkpoint::key(&(
+        &config.canonicalization,
+        balancing,
+        config.sentencepiece.max_sentence_length,
+    ))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Partition {
     Train,

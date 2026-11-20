@@ -8,7 +8,7 @@ use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::cancel::CancellationToken;
-use crate::config::{EffectiveConfig, MingramConfig, TrainingAlgorithm};
+use crate::config::{BalancingMode, EffectiveConfig, MingramConfig, TrainingAlgorithm};
 use crate::corpus_split::SplitManifest;
 use crate::progress::ProgressReporter;
 use crate::tokenizer::{
@@ -25,8 +25,18 @@ pub fn train_and_report(
     progress: &ProgressReporter,
     cancellation: &CancellationToken,
 ) -> Result<TrainerOutput> {
-    let inputs = split.train_paths();
-    let identity = checkpoint::key(&(1, &split.train))?;
+    let mut training_config = config.clone();
+    let (inputs, identity) =
+        if config.balancing.enabled && config.balancing.mode == BalancingMode::ScriptSample {
+            let sample = crate::script_sampling::prepare(config, split, progress, cancellation)?;
+            training_config.sentencepiece.input_sentence_size = 0;
+            training_config.sentencepiece.shuffle_input_sentence = false;
+            let identity = checkpoint::key(&(1, &split.train, &sample))?;
+            (sample.files, identity)
+        } else {
+            (split.train_paths(), checkpoint::key(&(1, &split.train))?)
+        };
+    let fitted = &training_config;
     let store = Store::new(
         config
             .output
@@ -35,18 +45,18 @@ pub fn train_and_report(
         identity,
     );
     let output = match config.sentencepiece.algorithm {
-        TrainingAlgorithm::Bpe => {
-            cached_native(config, &inputs, &store, "candidate", progress, cancellation)?
+        TrainingAlgorithm::Bpe | TrainingAlgorithm::Unigram { .. } => {
+            cached_native(fitted, &inputs, &store, "candidate", progress, cancellation)?
         }
         TrainingAlgorithm::Mingram { mingram } => {
-            train_mingram(config, &inputs, mingram, &store, progress, cancellation)?
+            train_mingram(fitted, &inputs, mingram, &store, progress, cancellation)?
         }
     };
-    publish_training_metadata(config, &inputs, &output)?;
+    publish_training_metadata(fitted, &inputs, &output)?;
     let baseline = match config.sentencepiece.algorithm {
         TrainingAlgorithm::Bpe => output.model.clone(),
-        TrainingAlgorithm::Mingram { .. } => {
-            let mut baseline = config.clone();
+        TrainingAlgorithm::Mingram { .. } | TrainingAlgorithm::Unigram { .. } => {
+            let mut baseline = fitted.clone();
             baseline.sentencepiece.algorithm = TrainingAlgorithm::Bpe;
             baseline.output.work_dir = config
                 .output
@@ -84,7 +94,7 @@ fn publish_training_metadata(
     let paths = TrainerPaths::from_config(config);
     checkpoint::atomic_write(&paths.output, &serde_json::to_vec_pretty(output)?)?;
     match config.sentencepiece.algorithm {
-        TrainingAlgorithm::Bpe => checkpoint::atomic_write(
+        TrainingAlgorithm::Bpe | TrainingAlgorithm::Unigram { .. } => checkpoint::atomic_write(
             &paths.request,
             &serde_json::to_vec_pretty(&trainer::build_trainer_request(config, inputs, &paths))?,
         )?,
@@ -120,7 +130,8 @@ fn evaluate_and_report(
         config.output.work_dir.join("reports/tokenizer.json"),
     ];
     let evaluation_key = checkpoint::key(&(
-        1,
+        3,
+        &store.identity,
         &split.test,
         Model::load(baseline)?.fingerprint(),
         Model::load(candidate)?.fingerprint(),
@@ -231,6 +242,9 @@ fn legacy_native_output(
     expected: &TrainerRequest,
     owned: bool,
 ) -> Result<Option<TrainerOutput>> {
+    if !paths.model.exists() && !paths.vocab.exists() {
+        return Ok(None);
+    }
     if !paths.request.exists() {
         ensure!(
             owned || (!paths.model.exists() && !paths.vocab.exists()),
@@ -268,12 +282,14 @@ fn legacy_native_output(
         "saved native vocabulary size differs"
     );
     ensure!(
-        model
-            .proto
-            .trainer_spec
-            .as_ref()
-            .is_some_and(|s| s.model_type() == sentencepiece_model::ModelType::Bpe),
-        "saved native model must be BPE"
+        model.proto.trainer_spec.as_ref().is_some_and(|s| {
+            match expected.sentencepiece.model_type.as_str() {
+                "bpe" => s.model_type() == sentencepiece_model::ModelType::Bpe,
+                "unigram" => s.model_type() == sentencepiece_model::ModelType::Unigram,
+                _ => false,
+            }
+        }),
+        "saved native model type differs from the training request"
     );
     Ok(Some(output))
 }
@@ -407,6 +423,24 @@ fn seed_config(config: &EffectiveConfig) -> Result<EffectiveConfig> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn new_native_prefix_ignores_another_models_shared_request() {
+        let temp = TempDir::new().unwrap();
+        let mut config = trainer::tests::config(temp.path());
+        config.output.model_prefix = "first".into();
+        let previous = native_request(&config, &[]);
+        let paths = TrainerPaths::from_config(&config);
+        fs::write(&paths.request, serde_json::to_vec(&previous).unwrap()).unwrap();
+        config.output.model_prefix = "second".into();
+        let paths = TrainerPaths::from_config(&config);
+        let expected = native_request(&config, &[]);
+        assert!(legacy_native_output(&paths, &expected, false)
+            .unwrap()
+            .is_none());
+        fs::write(&paths.model, b"untracked model").unwrap();
+        assert!(legacy_native_output(&paths, &expected, false).is_err());
+    }
 
     #[test]
     fn seed_configuration_is_bpe_without_mutating_the_final_algorithm() {

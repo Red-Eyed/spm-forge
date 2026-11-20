@@ -138,3 +138,72 @@ paired metrics, bounded batches, byte fallback and unknown rejection, changed op
 identity, corrupt snapshots, incomplete checkpoint files, older seed adoption, and interrupted
 export recovery. These checks establish implementation equivalence on controlled data;
 large-corpus HPC speedups and downstream quality remain unmeasured.
+
+## Sparse Unigram workflow smoke test
+
+The fork's CI-built macOS ARM64 free-threaded Python 3.14 wheel (`0.2.3.post1`)
+trained native sparse Unigram through the normal Rust workflow. The committed synthetic
+`data/train.txt` was split by the standard content-hash policy into 15,212 training
+records and 788 held-out records, at 512 pieces including byte fallback. BPE emitted
+18,205 tokens and sparse Unigram with automatic character coverage emitted 18,721
+(-2.834% savings), or 1.115 versus 1.084 prepared code points per token. Both had zero
+unknown IDs and reconstruction failures. Fallback tokens increased from 45 to 5,636.
+This is a workflow smoke test, not evidence that sparse pruning improves compression.
+
+Markdown and JSON reports now aggregate source hints with ratios computed from summed
+code points and tokens. A regression test uses unequal shard sizes to distinguish this
+from averaging per-shard ratios. The report cache version changes so existing evaluations
+regenerate without repeating preparation or native training.
+
+### Published fork wheel verification
+
+`spmforge-v0.2.3.post1` provides ten checksum-verified wheels: Linux x86_64
+manylinux 2.27/2.28 and macOS ARM64 11+, CPython 3.11–3.14 including free-threaded
+3.14. A clean `uv sync --locked --no-dev` installed the free-threaded macOS wheel
+from the explicit GitHub Release index without building SentencePiece.
+
+A second 512-piece native run through the normal project `uv` bridge reused the
+prepared split with a new model prefix. It emitted 18,719 candidate tokens versus
+18,295 BPE tokens (-2.318% savings), with 1.084 versus 1.109 code points per token
+and no unknown IDs or reconstruction failures. Both training runs sampled at most
+10,000 of 15,212 training chunks independently; the samples were not frozen between
+runs, so the first and second smoke results are separate observations. The saved
+model confirms that sparse pruning and automatic character coverage were enabled.
+
+The native request adoption guard now permits a fresh output prefix in the same
+work directory when no target model/vocabulary exists, while rejecting unrelated
+existing artifacts. The complete project check passed against the release wheel.
+
+## Content-only script-balanced sampling
+
+The sparse preset now uses `balancing.mode: "script_sample"`. Classification reads
+Unicode script properties from text only, with one Latin bucket and separate mixed
+and common buckets. No language/source/filename weighting or ICU dependency is added.
+A cached two-pass sampler allocates square-root code-point mass, converts it to exact
+record quotas using mean lengths, and caps quotas at available records. It selects
+intact records without replacement; actual code-point totals are reported rather than
+claimed to match quotas exactly. Memory holds bounded batches and per-script state,
+not a corpus-sized record/index reservoir. Native resampling is disabled for both
+candidate and BPE, which receive identical sample filenames.
+
+The existing prepared synthetic corpus was reused through `train-only`: 1,000 of
+15,212 training records were selected across seven script groups; all 788 held-out
+records remained available for evaluation. Input Latin/Thai code-point totals were
+155,276/49,432, and selected totals were 5,712/3,294. At 512 pieces, BPE emitted 18,166
+tokens and sparse Unigram emitted 18,631 (-2.560% savings), with no unknown IDs or
+reconstruction failures. This smoke test changes both training sample size and its
+composition relative to earlier experiments, so it does not isolate a balancing gain.
+
+A fresh preparation/train smoke test also passed (18,210 BPE tokens, 18,623 candidate
+tokens, -2.268% savings). A saved sample is deterministic for a given ordered prepared
+corpus and seed. The existing preparation stage can produce different shard ordering
+for tied script classifications, so the fresh and reused preparations are separate
+observations, not an exact replay comparison. Re-running the saved preparation reused
+the census, verified selected parts, and reused both trained models and evaluation.
+
+Regression tests cross bounded batch boundaries, compare renamed inputs and different
+worker counts with fixed record order, resume from a completed-file selection checkpoint,
+check code-point allocation with unequal record lengths and supply caps, reject changed
+sample files, and prove sampling does not read held-out files. `just check` passed all
+85 Rust tests including native/Python interoperability checks, lint/type checks, and
+the release build. No compression improvement on the production corpus is established.
